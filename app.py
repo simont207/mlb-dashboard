@@ -29,7 +29,8 @@ import os
 from datetime import datetime, date, timedelta
 from functools import wraps
 
-from flask import Flask, jsonify, request, render_template, abort
+import os
+from flask import Flask, jsonify, request, abort, Response
 from supabase import create_client, Client
 
 app = Flask(__name__, static_folder="static", template_folder=".")
@@ -56,7 +57,9 @@ def require_api_secret(f):
 # ── Frontend ─────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
-        return render_template("index.html")
+    path = os.path.join(os.path.dirname(__file__), "index.html")
+    with open(path) as f:
+        return Response(f.read(), mimetype="text/html")
 
 
 # ── API: Overall record ──────────────────────────────────────────────────────────
