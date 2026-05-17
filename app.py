@@ -29,10 +29,10 @@ import os
 from datetime import datetime, date, timedelta
 from functools import wraps
 
-from flask import Flask, jsonify, request, send_from_directory, abort
+from flask import Flask, jsonify, request, render_template, abort
 from supabase import create_client, Client
 
-app = Flask(__name__, static_folder="static")
+app = Flask(__name__, static_folder="static", template_folder=".")
 
 # ── Supabase client ─────────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ["SUPABASE_URL"]
@@ -56,7 +56,7 @@ def require_api_secret(f):
 # ── Frontend ─────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
-    return send_from_directory(".", "index.html")
+        return render_template("index.html")
 
 
 # ── API: Overall record ──────────────────────────────────────────────────────────
