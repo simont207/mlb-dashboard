@@ -1,0 +1,26 @@
+{
+  "name": "MLB Picks",
+  "short_name": "MLB",
+  "description": "MLB betting picks bot dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#00e676",
+  "background_color": "#0d0d0d",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["sports", "finance"],
+  "screenshots": []
+}
