@@ -61,16 +61,24 @@ def index():
 
 # ── Odds helper ──────────────────────────────────────────────────────────────────
 def odds_payout(odds_str, bet=100):
-    """Return profit on a winning $100 bet given American odds string.
-       Defaults to -110 if odds missing or unparseable."""
+    """Return profit on a winning bet.
+    Auto-detects decimal odds (e.g. 1.91, 2.50) vs American odds (e.g. -110, +150).
+    Defaults to decimal 1.91 (-110 equivalent) if missing or unparseable."""
     try:
-        odds = int(str(odds_str).replace('+', '').strip())
-        if odds < 0:
-            return round(bet * 100 / abs(odds), 2)
+        val = float(str(odds_str).replace('+', '').strip())
+        if 1.01 <= val < 100:
+            # Decimal odds: profit = bet * (odds - 1)
+            return round(bet * (val - 1), 2)
+        elif val >= 100:
+            # American positive odds
+            return round(bet * val / 100, 2)
+        elif val <= -100:
+            # American negative odds
+            return round(bet * 100 / abs(val), 2)
         else:
-            return round(bet * odds / 100, 2)
+            return round(bet * 0.9091, 2)
     except (ValueError, TypeError):
-        return round(bet * 100 / 110, 2)  # default -110
+        return round(bet * 0.9091, 2)
 
 
 # ── API: Overall record ──────────────────────────────────────────────────────────
