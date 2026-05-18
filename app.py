@@ -38,7 +38,7 @@ app = Flask(__name__, static_folder="static", template_folder=".")
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 API_SECRET   = os.environ.get("API_SECRET", "")
-
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ── Auth decorator ───────────────────────────────────────────────────────────────
@@ -60,6 +60,16 @@ def index():
     if auth != DASHBOARD_PASSWORD:
         return render_template("login.html")
     return render_template("index.html")
+
+@app.route("/login", methods=["POST"])
+def login():
+    password = request.form.get("password", "")
+    if password == DASHBOARD_PASSWORD:
+        from flask import make_response, redirect
+        resp = make_response(redirect("/"))
+        resp.set_cookie("auth", password, max_age=60*60*24*30)
+        return resp
+    return render_template("login.html", error="Wrong password")
 
 @app.route("/login", methods=["POST"])
 def login():
