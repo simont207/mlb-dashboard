@@ -512,7 +512,7 @@ function renderToday(picks) {
     const tag = isStrong
       ? `<span class="tag tag-strong">🔥 Strong</span>`
       : `<span class="tag tag-lean">Lean</span>`;
-    const odds = p.pick_odds ? `<span class="odds-pill">${p.pick_odds}</span>` : '';
+  const odds = p.pick_odds ? `<span class="odds-pill">${toDecimalOdds(p.pick_odds)}</span>` : '';
     const margin = p.margin != null ? p.margin.toFixed(2) : '—';
 
     return `
@@ -690,7 +690,7 @@ function renderHistory(picks) {
     const resultClass = r || 'pending';
     const resultLabel = r || '–';
     const margin = p.margin != null ? p.margin.toFixed(2) : '—';
-    const odds   = p.pick_odds ? ` · ${p.pick_odds}` : '';
+    const odds   = p.pick_odds ? ` · ${toDecimalOdds(p.pick_odds)}` : '';
 
     return `
       <div class="hist-card">
@@ -710,8 +710,15 @@ function formatDate(d) {
   const dt = new Date(d + 'T00:00:00');
   return dt.toLocaleDateString('en-US', { month:'short', day:'numeric' });
 }
+function toDecimalOdds(oddsStr) {
+    if (!oddsStr) return '';
+    const val = parseFloat(oddsStr);
+    if (isNaN(val)) return oddsStr;
+    if (val <= -100) return (1 + 100 / Math.abs(val)).toFixed(2);
+    if (val >= 100)  return (1 + val / 100).toFixed(2);
+    return parseFloat(oddsStr).toFixed(2); // already decimal
+}
 
-function abbrev(name) {
   if (!name) return '—';
   const parts = name.split(' ');
   return parts.length >= 2 ? parts[parts.length - 1] : name;
