@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MLB Picks — Login</title>
+  <style>
+    body { background: #0d1117; color: #fff; font-family: sans-serif;
+           display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .box { background: #161b22; padding: 2rem; border-radius: 12px; width: 300px; text-align: center; }
+    h2 { margin-bottom: 1.5rem; }
+    input { width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid #30363d;
+            background: #0d1117; color: #fff; font-size: 1rem; box-sizing: border-box; }
+    button { width: 100%; padding: 0.75rem; margin-top: 1rem; border-radius: 8px;
+             background: #00e676; border: none; font-size: 1rem; font-weight: bold;
+             cursor: pointer; color: #000; }
+    .error { color: #ff5252; margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>⚾ MLB Picks</h2>
+    <form method="POST" action="/login">
+      <input type="password" name="password" placeholder="Enter password" autofocus>
+      <button type="submit">Enter</button>
+      {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    </form>
+  </div>
+</body>
+</html>
