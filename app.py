@@ -258,28 +258,7 @@ def health():
     return jsonify({"status": "ok", "ts": datetime.utcnow().isoformat()})
 
 
-# ── Debug endpoint ────────────────────────────────────────────────────────────────
-@app.route("/debug")
-def debug():
-    import traceback
-    url_safe = SUPABASE_URL[:30] + "..." if len(SUPABASE_URL) > 30 else SUPABASE_URL
-    key_safe  = SUPABASE_KEY[:8] + "..." if len(SUPABASE_KEY) > 8 else "MISSING"
-    try:
-        resp = supabase.table("picks").select("id").limit(1).execute()
-        return jsonify({
-            "supabase_url_prefix": url_safe,
-            "supabase_key_prefix": key_safe,
-            "query": "ok",
-            "rows": resp.data,
-        })
-    except Exception as e:
-        return jsonify({
-            "supabase_url_prefix": url_safe,
-            "supabase_key_prefix": key_safe,
-            "query": "error",
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-        }), 500
+
 
 # ── Debug endpoint ────────────────────────────────────────────────────────────────
 @app.route("/debug")
