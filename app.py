@@ -24,7 +24,7 @@ Environment variables required:
     SUPABASE_KEY  — your Supabase anon/service key
     API_SECRET    — shared secret the bot sends in X-API-Secret header
 """
-
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
 import os
 from datetime import datetime, date, timedelta
 from functools import wraps
@@ -56,7 +56,20 @@ def require_api_secret(f):
 # ── Frontend ─────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
+    auth = request.cookies.get("auth")
+    if auth != DASHBOARD_PASSWORD:
+        return render_template("login.html")
     return render_template("index.html")
+
+@app.route("/login", methods=["POST"])
+def login():
+    password = request.form.get("password", "")
+    if password == DASHBOARD_PASSWORD:
+        from flask import make_response, redirect
+        resp = make_response(redirect("/"))
+        resp.set_cookie("auth", password, max_age=60*60*24*30)  # 30 days
+        return resp
+    return render_template("login.html", error="Wrong password")
 
 
 # ── Odds helper ──────────────────────────────────────────────────────────────────
