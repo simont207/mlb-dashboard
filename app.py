@@ -59,27 +59,47 @@ def index():
     return render_template("index.html")
 
 
+# ── Odds helper ──────────────────────────────────────────────────────────────────
+def odds_payout(odds_str, bet=100):
+    """Return profit on a winning $100 bet given American odds string.
+       Defaults to -110 if odds missing or unparseable."""
+    try:
+        odds = int(str(odds_str).replace('+', '').strip())
+        if odds < 0:
+            return round(bet * 100 / abs(odds), 2)
+        else:
+            return round(bet * odds / 100, 2)
+    except (ValueError, TypeError):
+        return round(bet * 100 / 110, 2)  # default -110
+
+
 # ── API: Overall record ──────────────────────────────────────────────────────────
 @app.route("/api/record")
 def api_record():
-    resp = supabase.table("picks").select("result, type").execute()
+    resp = supabase.table("picks").select("result, type, pick_odds").execute()
     rows = resp.data or []
 
     wins = losses = pushes = 0
+    profit = 0.0
+    total_risked = 0.0
+
     for row in rows:
         r = (row.get("result") or "").strip().upper()
         if r == "W":
             wins += 1
+            profit += odds_payout(row.get("pick_odds"))
+            total_risked += 100
         elif r == "L":
             losses += 1
+            profit -= 100
+            total_risked += 100
         elif r == "P":
             pushes += 1
 
     total_decided = wins + losses
-    win_pct  = round(wins / total_decided * 100, 1) if total_decided > 0 else 0.0
-    # ROI at -110: each bet risks 110 to win 100
-    roi      = round(((wins * 100) - (losses * 110)) / max(total_decided * 110, 1) * 100, 2)
-    profit   = round((wins * 100) - (losses * 110), 2)
+    win_pct = round(wins / total_decided * 100, 1) if total_decided > 0 else 0.0
+    roi     = round(profit / total_risked * 100, 2) if total_risked > 0 else 0.0
+    profit  = round(profit, 2)
 
     # Current streak
     all_resp = (supabase.table("picks")
@@ -145,7 +165,7 @@ def api_picks():
 @app.route("/api/chart")
 def api_chart():
     resp = (supabase.table("picks")
-            .select("date, result")
+            .select("date, result, pick_odds")
             .not_.is_("result", "null")
             .neq("result", "")
             .order("date")
@@ -153,15 +173,15 @@ def api_chart():
             .execute())
     rows = resp.data or []
 
-    points    = []
+    points     = []
     cumulative = 0.0
 
     for row in rows:
         r = (row.get("result") or "").strip().upper()
         if r == "W":
-            cumulative += 100
+            cumulative += odds_payout(row.get("pick_odds"))
         elif r == "L":
-            cumulative -= 110
+            cumulative -= 100
         # pushes don't change profit
         points.append({"date": row["date"], "profit": round(cumulative, 2)})
 
@@ -258,8 +278,6 @@ def health():
     return jsonify({"status": "ok", "ts": datetime.utcnow().isoformat()})
 
 
-
-
 # ── Debug endpoint ────────────────────────────────────────────────────────────────
 @app.route("/debug")
 def debug_info():
@@ -301,4 +319,5 @@ def debug_info():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
 
