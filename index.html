@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="theme-color" content="#00e676" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MLB Picks" />
@@ -12,23 +12,22 @@
   <link rel="apple-touch-icon" href="/static/icon-192.png" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
+    /* ── Reset & base ───────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #0a0a0a;
-      --surface:  #141414;
-      --surface2: #1c1c1c;
-      --border:   #242424;
+      --bg:       #0d0d0d;
+      --surface:  #1a1a1a;
+      --surface2: #222222;
+      --border:   #2a2a2a;
       --accent:   #00e676;
       --accent2:  #00b359;
-      --text:     #ffffff;
-      --muted:    #666;
-      --muted2:   #999;
+      --text:     #f0f0f0;
+      --muted:    #888;
       --win:      #00e676;
       --loss:     #ff4444;
-      --push:     #666;
-      --tab-h:    64px;
-      --safe-t:   env(safe-area-inset-top, 0px);
+      --push:     #888;
+      --tab-h:    56px;
       --safe-b:   env(safe-area-inset-bottom, 0px);
     }
 
@@ -36,78 +35,63 @@
       height: 100%;
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
       -webkit-font-smoothing: antialiased;
       overscroll-behavior: none;
-      user-select: none;
     }
 
+    /* ── Layout ─────────────────────────────────────────────────────── */
     #app {
       display: flex;
       flex-direction: column;
       height: 100%;
-      max-width: 430px;
+      max-width: 480px;
       margin: 0 auto;
-      position: relative;
     }
 
-    /* ── Header ── */
     header {
-      padding: calc(var(--safe-t) + 16px) 20px 14px;
-      background: var(--bg);
+      padding: 16px 16px 10px;
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 8px;
       position: sticky;
       top: 0;
+      background: var(--bg);
       z-index: 10;
-      border-bottom: 1px solid var(--border);
     }
 
-    .header-left { display: flex; align-items: center; gap: 10px; }
-
-    .header-logo {
-      width: 36px; height: 36px;
-      background: linear-gradient(135deg, #00e676, #00b359);
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
+    header h1 {
       font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
     }
 
-    .header-title { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
-    .header-sub   { font-size: 11px; color: var(--muted2); margin-top: 1px; }
-
-    .refresh-btn {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 6px 12px;
+    header .subtitle {
       font-size: 12px;
-      color: var(--muted2);
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
+      color: var(--muted);
+      margin-left: auto;
     }
 
-    /* ── Content ── */
     .content {
       flex: 1;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
-      padding: 16px 16px calc(var(--tab-h) + var(--safe-b) + 20px);
+      padding: 12px 12px calc(var(--tab-h) + var(--safe-b) + 12px);
     }
 
-    /* ── Tab bar ── */
+    /* ── Tab bar ────────────────────────────────────────────────────── */
     nav {
       position: fixed;
       bottom: 0;
       left: 50%;
       transform: translateX(-50%);
       width: 100%;
-      max-width: 430px;
+      max-width: 480px;
       height: calc(var(--tab-h) + var(--safe-b));
-      background: rgba(14,14,14,0.95);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      background: var(--surface);
       border-top: 1px solid var(--border);
       display: flex;
       padding-bottom: var(--safe-b);
@@ -120,293 +104,201 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 4px;
+      gap: 3px;
       background: none;
       border: none;
       color: var(--muted);
       font-size: 10px;
       font-weight: 600;
-      letter-spacing: 0.3px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
       cursor: pointer;
-      transition: color 0.2s;
+      transition: color 0.15s;
       -webkit-tap-highlight-color: transparent;
-      position: relative;
     }
 
-    .tab-btn .tab-icon { font-size: 22px; line-height: 1; transition: transform 0.2s; }
+    .tab-btn .icon { font-size: 20px; line-height: 1; }
     .tab-btn.active { color: var(--accent); }
-    .tab-btn.active .tab-icon { transform: scale(1.1); }
 
-    .tab-indicator {
-      position: absolute;
-      top: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 32px;
-      height: 3px;
-      background: var(--accent);
-      border-radius: 0 0 3px 3px;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-    .tab-btn.active .tab-indicator { opacity: 1; }
-
-    /* ── Panels ── */
-    .panel { display: none; animation: fadeIn 0.2s ease; }
+    /* ── Tab panels ─────────────────────────────────────────────────── */
+    .panel { display: none; }
     .panel.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-    /* ── Cards ── */
+    /* ── Cards ──────────────────────────────────────────────────────── */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 16px;
-      margin-bottom: 12px;
-      position: relative;
-      overflow: hidden;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 10px;
     }
 
-    .card-accent-bar {
-      position: absolute;
-      left: 0; top: 0; bottom: 0;
-      width: 4px;
-      background: linear-gradient(180deg, var(--accent), var(--accent2));
-      border-radius: 16px 0 0 16px;
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
     }
-
-    .card.has-bar { padding-left: 20px; }
 
     .matchup {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
-      letter-spacing: -0.2px;
-      margin-bottom: 4px;
     }
+
+    .badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-strong { background: rgba(0,230,118,0.2); color: var(--accent); }
+    .badge-lean   { background: rgba(255,255,255,0.08); color: var(--muted); }
 
     .pick-line {
-      font-size: 20px;
-      font-weight: 800;
+      font-size: 16px;
+      font-weight: 700;
       color: var(--accent);
-      letter-spacing: -0.5px;
-      margin: 10px 0 8px;
+      margin-bottom: 8px;
     }
 
-    .tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 3px 10px;
-      border-radius: 20px;
-      letter-spacing: 0.3px;
-    }
-
-    .tag-strong { background: rgba(0,230,118,0.15); color: var(--accent); }
-    .tag-lean   { background: rgba(255,255,255,0.07); color: var(--muted2); }
-
-    .meta-row {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      margin-top: 10px;
-    }
-
-    .meta-item {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .meta-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-    .meta-value { font-size: 13px; font-weight: 600; color: var(--text); margin-top: 2px; }
-
-    .odds-pill {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 2px 8px;
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    /* ── Record hero ── */
-    .record-hero {
-      background: linear-gradient(135deg, #141414, #1a1a1a);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 24px 20px 20px;
-      margin-bottom: 12px;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .record-hero::before {
-      content: '⚾';
-      position: absolute;
-      font-size: 120px;
-      opacity: 0.04;
-      right: -20px;
-      bottom: -20px;
-    }
-
-    .season-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
+    .pick-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 12px;
+      font-size: 12px;
       color: var(--muted);
-      margin-bottom: 16px;
+    }
+
+    .pick-meta span b { color: var(--text); }
+
+    /* ── Record tab ─────────────────────────────────────────────────── */
+    .record-hero {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 10px;
     }
 
     .wlp {
       display: flex;
       justify-content: center;
-      gap: 0;
-      margin-bottom: 16px;
+      gap: 24px;
+      margin-bottom: 8px;
     }
 
-    .wlp-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      flex: 1;
-      position: relative;
-    }
-
-    .wlp-item + .wlp-item::before {
-      content: '';
-      position: absolute;
-      left: 0; top: 10%; bottom: 10%;
-      width: 1px;
-      background: var(--border);
-    }
-
-    .wlp-num  { font-size: 48px; font-weight: 900; line-height: 1; letter-spacing: -2px; }
-    .wlp-lbl  { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+    .wlp-item { display: flex; flex-direction: column; align-items: center; }
+    .wlp-num  { font-size: 36px; font-weight: 800; line-height: 1; }
+    .wlp-lbl  { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
 
     .wlp-item.win  .wlp-num { color: var(--win); }
     .wlp-item.loss .wlp-num { color: var(--loss); }
     .wlp-item.push .wlp-num { color: var(--push); }
 
-    .streak-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 16px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    .streak-w { background: rgba(0,230,118,0.12); color: var(--win); border: 1px solid rgba(0,230,118,0.2); }
-    .streak-l { background: rgba(255,68,68,0.12);  color: var(--loss); border: 1px solid rgba(255,68,68,0.2); }
-
-    /* ── Stats grid ── */
     .stats-grid {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 12px;
+      gap: 8px;
+      margin-bottom: 10px;
     }
 
     .stat-box {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 14px 10px;
+      border-radius: 12px;
+      padding: 12px 8px;
       text-align: center;
     }
 
-    .stat-val { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
-    .stat-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+    .stat-val  { font-size: 20px; font-weight: 800; }
+    .stat-lbl  { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
 
-    .stat-val.green { color: var(--win); }
-    .stat-val.red   { color: var(--loss); }
+    .stat-val.green  { color: var(--win); }
+    .stat-val.red    { color: var(--loss); }
+    .stat-val.muted  { color: var(--muted); }
 
-    /* ── Chart ── */
     .chart-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 16px;
-    }
-
-    .chart-title {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--muted);
-      margin-bottom: 14px;
-    }
-
-    .chart-wrap { position: relative; height: 160px; }
-
-    /* ── History cards ── */
-    .hist-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 14px 16px;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-
-    .hist-result {
-      width: 38px;
-      height: 38px;
       border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      font-weight: 900;
-      flex-shrink: 0;
+      padding: 14px;
     }
 
-    .hist-result.W { background: rgba(0,230,118,0.15); color: var(--win); }
-    .hist-result.L { background: rgba(255,68,68,0.15);  color: var(--loss); }
-    .hist-result.P { background: rgba(100,100,100,0.15); color: var(--muted2); }
-    .hist-result.pending { background: var(--surface2); color: var(--muted); font-size: 12px; }
+    .chart-card h3 { font-size: 13px; color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .chart-wrap    { position: relative; height: 180px; }
 
-    .hist-body { flex: 1; min-width: 0; }
-    .hist-matchup { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .hist-pick    { font-size: 12px; color: var(--accent); font-weight: 600; margin-top: 2px; }
-    .hist-meta    { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    /* ── History tab ─────────────────────────────────────────────────── */
+    .hist-table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
 
-    /* ── Section label ── */
-    .section-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    thead th {
+      background: var(--surface2);
       color: var(--muted);
-      padding: 4px 4px 8px;
+      font-weight: 600;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 9px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
     }
 
-    /* ── Empty ── */
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody td { padding: 9px 10px; color: var(--text); background: var(--surface); }
+
+    .result-w { color: var(--win);  font-weight: 700; }
+    .result-l { color: var(--loss); font-weight: 700; }
+    .result-p { color: var(--push); font-weight: 700; }
+
+    /* ── Empty states ────────────────────────────────────────────────── */
     .empty {
       text-align: center;
-      padding: 60px 20px;
+      padding: 40px 20px;
       color: var(--muted);
     }
 
-    .empty .big { font-size: 52px; margin-bottom: 12px; }
-    .empty p    { font-size: 15px; line-height: 1.5; }
+    .empty .big { font-size: 40px; margin-bottom: 8px; }
+    .empty p    { font-size: 14px; }
 
-    /* ── Spinner ── */
+    /* ── Streak badge ────────────────────────────────────────────────── */
+    .streak-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-top: 8px;
+    }
+
+    .streak-w { background: rgba(0,230,118,0.15); color: var(--win); }
+    .streak-l { background: rgba(255,68,68,0.15);  color: var(--loss); }
+
+    /* ── Spinner ─────────────────────────────────────────────────────── */
     .spinner {
       display: flex;
       justify-content: center;
-      align-items: center;
-      padding: 60px;
+      padding: 30px;
     }
 
     .spinner::after {
       content: '';
-      width: 32px;
-      height: 32px;
+      width: 28px;
+      height: 28px;
       border: 3px solid var(--border);
       border-top-color: var(--accent);
       border-radius: 50%;
@@ -415,24 +307,43 @@
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Press animation ── */
-    .card:active, .hist-card:active { transform: scale(0.98); transition: transform 0.1s; }
+    /* ── Misc ────────────────────────────────────────────────────────── */
+    .divider {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 8px 4px 4px;
+    }
+
+    .odds-chip {
+      display: inline-block;
+      background: var(--surface2);
+      border-radius: 6px;
+      padding: 1px 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .refresh-note {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      padding: 8px 0 2px;
+    }
   </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <div class="header-left">
-      <div class="header-logo">⚾</div>
-      <div>
-        <div class="header-title">MLB Picks</div>
-        <div class="header-sub" id="last-refresh">Loading…</div>
-      </div>
-    </div>
-    <button class="refresh-btn" onclick="refreshAll()">↻ Refresh</button>
+    <span style="font-size:22px">⚾</span>
+    <h1>MLB Picks Bot</h1>
+    <span class="subtitle" id="last-refresh">Loading…</span>
   </header>
 
   <main class="content" id="main-content">
+    <!-- panels injected by JS -->
     <div class="panel active" id="panel-today"></div>
     <div class="panel"        id="panel-record"></div>
     <div class="panel"        id="panel-history"></div>
@@ -440,67 +351,72 @@
 
   <nav>
     <button class="tab-btn active" data-tab="today">
-      <div class="tab-indicator"></div>
-      <span class="tab-icon">📅</span>
-      <span>Today</span>
+      <span class="icon">📅</span>Today
     </button>
     <button class="tab-btn" data-tab="record">
-      <div class="tab-indicator"></div>
-      <span class="tab-icon">📊</span>
-      <span>Record</span>
+      <span class="icon">📊</span>Record
     </button>
     <button class="tab-btn" data-tab="history">
-      <div class="tab-indicator"></div>
-      <span class="tab-icon">🕐</span>
-      <span>History</span>
+      <span class="icon">📜</span>History
     </button>
   </nav>
 </div>
 
 <script>
-let activeTab = 'today';
-let chartInst = null;
-const REFRESH = 5 * 60 * 1000;
+/* ── State ──────────────────────────────────────────────────────────────── */
+let activeTab  = 'today';
+let chartInst  = null;
+const REFRESH  = 5 * 60 * 1000; // 5 minutes
 
+/* ── Tab switching ──────────────────────────────────────────────────────── */
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
     if (tab === activeTab) return;
     activeTab = tab;
+
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     document.getElementById('panel-' + tab).classList.add('active');
+
     loadTab(tab);
   });
 });
 
+/* ── Fetch helpers ──────────────────────────────────────────────────────── */
 async function fetchJSON(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
-function spinner() { return '<div class="spinner"></div>'; }
-function setPanel(id, html) { document.getElementById(id).innerHTML = html; }
+function spinner() {
+  return '<div class="spinner"></div>';
+}
 
-/* ── TODAY ── */
+function setPanel(id, html) {
+  document.getElementById(id).innerHTML = html;
+}
+
+/* ── TODAY tab ──────────────────────────────────────────────────────────── */
 async function loadToday() {
   setPanel('panel-today', spinner());
   try {
     const picks = await fetchJSON('/api/today');
     setPanel('panel-today', renderToday(picks));
-  } catch(e) {
-    setPanel('panel-today', `<div class="empty"><p>Failed to load</p></div>`);
+  } catch (e) {
+    setPanel('panel-today', `<div class="empty"><p>Failed to load: ${e.message}</p></div>`);
   }
 }
 
 function renderToday(picks) {
-  const today = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+  const today = new Date().toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
 
   if (!picks.length) {
     return `
-      <div class="section-label">${today}</div>
+      <div style="text-align:center;padding:12px 4px 6px;font-size:13px;color:var(--muted);">${today}</div>
       <div class="empty">
         <div class="big">⚾</div>
         <p>No qualifying picks today</p>
@@ -508,73 +424,69 @@ function renderToday(picks) {
   }
 
   const cards = picks.map(p => {
-    const isStrong = p.type === 'strong';
-    const tag = isStrong
-      ? `<span class="tag tag-strong">🔥 Strong</span>`
-      : `<span class="tag tag-lean">Lean</span>`;
-  const odds = p.pick_odds ? `<span class="odds-pill">${toDecimalOdds(p.pick_odds)}</span>` : '';
-    const margin = p.margin != null ? p.margin.toFixed(2) : '—';
+    const isStrong  = p.type === 'strong';
+    const badgeCls  = isStrong ? 'badge-strong' : 'badge-lean';
+    const badgeTxt  = isStrong ? '🔥 STRONG' : 'LEAN';
+    const oddsStr   = p.pick_odds ? `<span class="odds-chip">${toDecimalOdds(p.pick_odds)}</span>` : '';
+    const marginStr = p.margin != null ? p.margin.toFixed(2) : '—';
+
+    const awayERA = p.away_pitcher ? `${p.away_pitcher.split(' ').pop()}: ERA pending` : '—';
+    const homeERA = p.home_pitcher ? `${p.home_pitcher.split(' ').pop()}: ERA pending` : '—';
 
     return `
-      <div class="card has-bar">
-        <div class="card-accent-bar"></div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <div class="matchup">${abbrev(p.away_team)} @ ${abbrev(p.home_team)}</div>
-          ${tag}
+      <div class="card">
+        <div class="card-header">
+          <div class="matchup">${p.away_team} @ ${p.home_team}</div>
+          <span class="badge ${badgeCls}">${badgeTxt}</span>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">${p.away_team} vs ${p.home_team}</div>
-        <div class="pick-line">🧢 ${p.pick} ML ${odds}</div>
-        <div class="meta-row">
-          <div class="meta-item">
-            <div class="meta-label">Edge</div>
-            <div class="meta-value">${margin}</div>
-          </div>
-          <div class="meta-item">
-            <div class="meta-label">Away Pitcher</div>
-            <div class="meta-value">${p.away_pitcher || '—'}</div>
-          </div>
-          <div class="meta-item">
-            <div class="meta-label">Home Pitcher</div>
-            <div class="meta-value">${p.home_pitcher || '—'}</div>
-          </div>
+        <div class="pick-line">✅ ${p.pick} ML ${oddsStr}</div>
+        <div class="pick-meta">
+          <span>📊 Edge <b>${marginStr}</b></span>
+          <span>🗂️ Type <b>${p.type || '—'}</b></span>
+          <span>🏟️ <b>${p.home_team.split(' ').pop()} (home)</b></span>
+          <span>📅 <b>${formatDate(p.date)}</b></span>
         </div>
       </div>`;
   }).join('');
 
-  return `<div class="section-label">${today}</div>${cards}`;
+  return `
+    <div style="text-align:center;padding:12px 4px 6px;font-size:13px;color:var(--muted);">${today}</div>
+    <div class="refresh-note">Auto-refreshes every 5 min</div>
+    ${cards}`;
 }
 
-/* ── RECORD ── */
+/* ── RECORD tab ─────────────────────────────────────────────────────────── */
 async function loadRecord() {
   setPanel('panel-record', spinner());
   try {
-    const [rec, chartPts] = await Promise.all([fetchJSON('/api/record'), fetchJSON('/api/chart')]);
-    setPanel('panel-record', renderRecord(rec));
+    const [rec, chartPts] = await Promise.all([
+      fetchJSON('/api/record'),
+      fetchJSON('/api/chart'),
+    ]);
+    setPanel('panel-record', renderRecord(rec, chartPts));
     renderChart(chartPts);
-  } catch(e) {
-    setPanel('panel-record', `<div class="empty"><p>Failed to load</p></div>`);
+  } catch (e) {
+    setPanel('panel-record', `<div class="empty"><p>Failed to load: ${e.message}</p></div>`);
   }
 }
 
-function renderRecord(r) {
+function renderRecord(r, chartPts) {
   const profitColor = r.profit >= 0 ? 'green' : 'red';
   const roiColor    = r.roi    >= 0 ? 'green' : 'red';
   const winColor    = r.win_pct >= 52.4 ? 'green' : r.win_pct < 45 ? 'red' : '';
-  const profitSign  = r.profit >= 0 ? '+' : '';
-  const roiSign     = r.roi    >= 0 ? '+' : '';
 
   let streakHtml = '';
   if (r.streak > 0 && r.streak_type) {
     const cls = r.streak_type === 'W' ? 'streak-w' : 'streak-l';
-    const lbl = r.streak_type === 'W'
-      ? `🔥 ${r.streak}-Game Win Streak`
-      : `❄️ ${r.streak}-Game Losing Streak`;
-    streakHtml = `<div style="margin-top:12px;"><span class="streak-badge ${cls}">${lbl}</span></div>`;
+    const lbl = r.streak_type === 'W' ? `🔥 ${r.streak}-Game Win Streak` : `❄️ ${r.streak}-Game Losing Streak`;
+    streakHtml = `<div><span class="streak-badge ${cls}">${lbl}</span></div>`;
   }
+
+  const profitSign  = r.profit  >= 0 ? '+' : '';
+  const roiSign     = r.roi     >= 0 ? '+' : '';
 
   return `
     <div class="record-hero">
-      <div class="season-label">2026 Season Record</div>
       <div class="wlp">
         <div class="wlp-item win">
           <div class="wlp-num">${r.wins}</div>
@@ -602,30 +514,37 @@ function renderRecord(r) {
         <div class="stat-lbl">ROI</div>
       </div>
       <div class="stat-box">
-        <div class="stat-val ${profitColor}">${profitSign}$${Math.abs(r.profit).toFixed(0)}</div>
-        <div class="stat-lbl">Profit</div>
+        <div class="stat-val ${profitColor}">${profitSign}$${Math.abs(r.profit)}</div>
+        <div class="stat-lbl">Profit (units)</div>
       </div>
     </div>
 
     <div class="chart-card">
-      <div class="chart-title">Cumulative Profit</div>
-      <div class="chart-wrap"><canvas id="profit-chart"></canvas></div>
+      <h3>Cumulative Profit</h3>
+      <div class="chart-wrap">
+        <canvas id="profit-chart"></canvas>
+      </div>
     </div>`;
 }
 
 function renderChart(points) {
   const ctx = document.getElementById('profit-chart');
   if (!ctx) return;
+
   if (chartInst) { chartInst.destroy(); chartInst = null; }
-  if (!points.length) return;
+
+  if (!points.length) {
+    ctx.parentElement.innerHTML = '<div class="empty" style="padding:20px"><p>No completed picks yet</p></div>';
+    return;
+  }
 
   const labels = points.map(p => {
     const d = new Date(p.date + 'T00:00:00');
-    return d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   });
-  const data  = points.map(p => p.profit);
-  const last  = data[data.length - 1] ?? 0;
-  const color = last >= 0 ? '#00e676' : '#ff4444';
+  const data   = points.map(p => p.profit);
+  const last   = data[data.length - 1] ?? 0;
+  const color  = last >= 0 ? '#00e676' : '#ff4444';
 
   chartInst = new Chart(ctx, {
     type: 'line',
@@ -633,97 +552,126 @@ function renderChart(points) {
       labels,
       datasets: [{
         data,
-        borderColor: color,
-        backgroundColor: last >= 0 ? 'rgba(0,230,118,0.06)' : 'rgba(255,68,68,0.06)',
-        borderWidth: 2,
-        pointRadius: 0,
-        pointHoverRadius: 5,
-        fill: true,
-        tension: 0.4,
+        borderColor:     color,
+        backgroundColor: last >= 0 ? 'rgba(0,230,118,0.08)' : 'rgba(255,68,68,0.08)',
+        borderWidth:     2,
+        pointRadius:     0,
+        pointHoverRadius: 4,
+        fill:            true,
+        tension:         0.3,
       }]
     },
     options: {
-      responsive: true,
+      responsive:          true,
       maintainAspectRatio: false,
-      interaction: { mode:'index', intersect:false },
+      interaction:         { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#1c1c1c',
-          borderColor: '#2a2a2a',
-          borderWidth: 1,
-          titleColor: '#888',
-          bodyColor: color,
-          padding: 10,
-          callbacks: { label: c => ` ${c.raw >= 0 ? '+' : ''}$${c.raw.toFixed(0)}` }
+          backgroundColor: '#222',
+          titleColor:      '#aaa',
+          bodyColor:       color,
+          callbacks: {
+            label: ctx => {
+              const v = ctx.raw;
+              return ` ${v >= 0 ? '+' : ''}$${v.toFixed(0)}`;
+            }
+          }
         }
       },
       scales: {
-        x: { ticks: { color:'#444', font:{size:10} }, grid: { color:'#1a1a1a' } },
+        x: {
+          ticks:  { color: '#666', font: { size: 10 }, maxTicksLimit: 6 },
+          grid:   { color: '#1e1e1e' },
+        },
         y: {
-          ticks: { color:'#444', font:{size:10}, callback: v => (v>=0?'+':'')+'$'+v },
-          grid:  { color:'#1a1a1a' }
+          ticks: {
+            color: '#666',
+            font:  { size: 10 },
+            callback: v => (v >= 0 ? '+' : '') + '$' + v,
+          },
+          grid:   { color: '#1e1e1e' },
         }
       }
     }
   });
 }
 
-/* ── HISTORY ── */
+/* ── HISTORY tab ────────────────────────────────────────────────────────── */
 async function loadHistory() {
   setPanel('panel-history', spinner());
   try {
     const picks = await fetchJSON('/api/picks');
     setPanel('panel-history', renderHistory(picks));
-  } catch(e) {
-    setPanel('panel-history', `<div class="empty"><p>Failed to load</p></div>`);
+  } catch (e) {
+    setPanel('panel-history', `<div class="empty"><p>Failed to load: ${e.message}</p></div>`);
   }
 }
 
 function renderHistory(picks) {
   if (!picks.length) {
-    return `<div class="empty"><div class="big">🕐</div><p>No pick history yet</p></div>`;
+    return `<div class="empty"><div class="big">📜</div><p>No pick history yet</p></div>`;
   }
 
-  return picks.map(p => {
-    const r = (p.result || '').toUpperCase();
-    const resultClass = r || 'pending';
-    const resultLabel = r || '–';
-    const margin = p.margin != null ? p.margin.toFixed(2) : '—';
-    const odds   = p.pick_odds ? ` · ${toDecimalOdds(p.pick_odds)}` : '';
+  const rows = picks.map(p => {
+    const r       = (p.result || '').toUpperCase();
+    const resCls  = r === 'W' ? 'result-w' : r === 'L' ? 'result-l' : 'result-p';
+    const resDisp = r || '—';
+    const margin  = p.margin != null ? p.margin.toFixed(2) : '—';
+    const odds    = toDecimalOdds(p.pick_odds) || '—';
 
     return `
-      <div class="hist-card">
-        <div class="hist-result ${resultClass}">${resultLabel}</div>
-        <div class="hist-body">
-          <div class="hist-matchup">${p.away_team} @ ${p.home_team}</div>
-          <div class="hist-pick">✅ ${p.pick} ML${odds}</div>
-          <div class="hist-meta">${formatDate(p.date)} · Edge ${margin}</div>
-        </div>
-      </div>`;
+      <tr>
+        <td>${formatDate(p.date)}</td>
+        <td>${abbrev(p.away_team)} @ ${abbrev(p.home_team)}</td>
+        <td>${abbrev(p.pick)}</td>
+        <td>${odds}</td>
+        <td>${margin}</td>
+        <td class="${resCls}">${resDisp}</td>
+      </tr>`;
   }).join('');
+
+  return `
+    <div class="hist-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Matchup</th>
+            <th>Pick</th>
+            <th>Odds</th>
+            <th>Edge</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
-/* ── Helpers ── */
+/* ── Helpers ────────────────────────────────────────────────────────────── */
+function toDecimalOdds(oddsStr) {
+  if (!oddsStr) return '';
+  const val = parseFloat(oddsStr);
+  if (isNaN(val)) return oddsStr;
+  if (val <= -100) return (1 + 100 / Math.abs(val)).toFixed(2);
+  if (val >= 100)  return (1 + val / 100).toFixed(2);
+  return parseFloat(oddsStr).toFixed(2);
+}
+
 function formatDate(d) {
   if (!d) return '—';
   const dt = new Date(d + 'T00:00:00');
-  return dt.toLocaleDateString('en-US', { month:'short', day:'numeric' });
-}
-function toDecimalOdds(oddsStr) {
-    if (!oddsStr) return '';
-    const val = parseFloat(oddsStr);
-    if (isNaN(val)) return oddsStr;
-    if (val <= -100) return (1 + 100 / Math.abs(val)).toFixed(2);
-    if (val >= 100)  return (1 + val / 100).toFixed(2);
-    return parseFloat(oddsStr).toFixed(2); // already decimal
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function abbrev(name) {
   if (!name) return '—';
   const parts = name.split(' ');
   return parts.length >= 2 ? parts[parts.length - 1] : name;
 }
 
+/* ── Load & refresh ─────────────────────────────────────────────────────── */
 function loadTab(tab) {
   if (tab === 'today')   loadToday();
   if (tab === 'record')  loadRecord();
@@ -734,15 +682,20 @@ function refreshAll() {
   loadTab(activeTab);
   const now = new Date();
   document.getElementById('last-refresh').textContent =
-    'Updated ' + now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+    'Updated ' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+// Initial load
 refreshAll();
+
+// Auto-refresh every 5 minutes
 setInterval(refreshAll, REFRESH);
 
+/* ── Service Worker ─────────────────────────────────────────────────────── */
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/static/sw.js').catch(() => {});
 }
 </script>
 </body>
 </html>
+
