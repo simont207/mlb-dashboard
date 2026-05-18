@@ -33,22 +33,19 @@ def require_api_secret(f):
 
 
 # ── Frontend ─────────────────────────────────────────────────────────────────────
-@app.route("/")
-def index():
-    if DASHBOARD_PASSWORD:
-        auth = request.cookies.get("auth")
-        if auth != DASHBOARD_PASSWORD:
-            return render_template("login.html")
-    return render_template("index.html")
-
-@app.route("/login", methods=["POST"])
-def login():
-    password = request.form.get("password", "")
-    if password == DASHBOARD_PASSWORD:
+@app.route("/guest/<expiry_date>")
+def guest_link(expiry_date):
+    try:
+        from datetime import datetime as dt
+        expiry = dt.strptime(expiry_date, "%Y-%m-%d").date()
+        if date.today() > expiry:
+            return render_template("login.html", error="This link has expired")
+        max_age = int((dt(expiry.year, expiry.month, expiry.day, 23, 59, 59) - dt.now()).total_seconds())
         resp = make_response(redirect("/"))
-        resp.set_cookie("auth", password, max_age=60*60*24*30)
+        resp.set_cookie("auth", DASHBOARD_PASSWORD, max_age=max(max_age, 0))
         return resp
-    return render_template("login.html", error="Wrong password")
+    except ValueError:
+        return render_template("login.html", error="Invalid link")
 
 
 # ── Odds helper ──────────────────────────────────────────────────────────────────
