@@ -1,44 +1,23 @@
 #!/usr/bin/env python3
 """
 MLB Picks Dashboard — Flask + Supabase backend
-================================================
-Supabase table (create this manually in Supabase SQL editor):
-
-    CREATE TABLE picks (
-      id           BIGSERIAL PRIMARY KEY,
-      date         DATE,
-      away_team    TEXT,
-      home_team    TEXT,
-      away_pitcher TEXT,
-      home_pitcher TEXT,
-      pick         TEXT,
-      margin       FLOAT,
-      pick_odds    TEXT,
-      type         TEXT,
-      result       TEXT DEFAULT '',
-      created_at   TIMESTAMPTZ DEFAULT NOW()
-    );
-
-Environment variables required:
-    SUPABASE_URL  — your Supabase project URL
-    SUPABASE_KEY  — your Supabase anon/service key
-    API_SECRET    — shared secret the bot sends in X-API-Secret header
 """
-DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
+
 import os
 from datetime import datetime, date, timedelta
 from functools import wraps
 
-from flask import Flask, jsonify, request, render_template, abort
+from flask import Flask, jsonify, request, render_template, abort, make_response, redirect
 from supabase import create_client, Client
 
 app = Flask(__name__, static_folder="static", template_folder=".")
 
 # ── Supabase client ─────────────────────────────────────────────────────────────
-SUPABASE_URL = os.environ["SUPABASE_URL"]
-SUPABASE_KEY = os.environ["SUPABASE_KEY"]
-API_SECRET   = os.environ.get("API_SECRET", "")
+SUPABASE_URL       = os.environ["SUPABASE_URL"]
+SUPABASE_KEY       = os.environ["SUPABASE_KEY"]
+API_SECRET         = os.environ.get("API_SECRET", "")
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ── Auth decorator ───────────────────────────────────────────────────────────────
@@ -56,47 +35,31 @@ def require_api_secret(f):
 # ── Frontend ─────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
-    auth = request.cookies.get("auth")
-    if auth != DASHBOARD_PASSWORD:
-        return render_template("login.html")
+    if DASHBOARD_PASSWORD:
+        auth = request.cookies.get("auth")
+        if auth != DASHBOARD_PASSWORD:
+            return render_template("login.html")
     return render_template("index.html")
 
 @app.route("/login", methods=["POST"])
 def login():
     password = request.form.get("password", "")
     if password == DASHBOARD_PASSWORD:
-        from flask import make_response, redirect
         resp = make_response(redirect("/"))
         resp.set_cookie("auth", password, max_age=60*60*24*30)
-        return resp
-    return render_template("login.html", error="Wrong password")
-
-@app.route("/login", methods=["POST"])
-def login():
-    password = request.form.get("password", "")
-    if password == DASHBOARD_PASSWORD:
-        from flask import make_response, redirect
-        resp = make_response(redirect("/"))
-        resp.set_cookie("auth", password, max_age=60*60*24*30)  # 30 days
         return resp
     return render_template("login.html", error="Wrong password")
 
 
 # ── Odds helper ──────────────────────────────────────────────────────────────────
 def odds_payout(odds_str, bet=100):
-    """Return profit on a winning bet.
-    Auto-detects decimal odds (e.g. 1.91, 2.50) vs American odds (e.g. -110, +150).
-    Defaults to decimal 1.91 (-110 equivalent) if missing or unparseable."""
     try:
         val = float(str(odds_str).replace('+', '').strip())
         if 1.01 <= val < 100:
-            # Decimal odds: profit = bet * (odds - 1)
             return round(bet * (val - 1), 2)
         elif val >= 100:
-            # American positive odds
             return round(bet * val / 100, 2)
         elif val <= -100:
-            # American negative odds
             return round(bet * 100 / abs(val), 2)
         else:
             return round(bet * 0.9091, 2)
@@ -132,7 +95,6 @@ def api_record():
     roi     = round(profit / total_risked * 100, 2) if total_risked > 0 else 0.0
     profit  = round(profit, 2)
 
-    # Current streak
     all_resp = (supabase.table("picks")
                 .select("result, date")
                 .not_.is_("result", "null")
@@ -213,7 +175,6 @@ def api_chart():
             cumulative += odds_payout(row.get("pick_odds"))
         elif r == "L":
             cumulative -= 100
-        # pushes don't change profit
         points.append({"date": row["date"], "profit": round(cumulative, 2)})
 
     return jsonify(points)
@@ -223,20 +184,6 @@ def api_chart():
 @app.route("/api/log_pick", methods=["POST"])
 @require_api_secret
 def api_log_pick():
-    """
-    Expected JSON body:
-    {
-        "date":         "2026-05-17",
-        "away_team":    "New York Yankees",
-        "home_team":    "Boston Red Sox",
-        "away_pitcher": "Gerrit Cole",
-        "home_pitcher": "Nathan Eovaldi",
-        "pick":         "New York Yankees",
-        "margin":       1.45,
-        "pick_odds":    "-130",
-        "type":         "strong"
-    }
-    """
     data = request.get_json(force=True, silent=True)
     if not data:
         abort(400, "JSON body required")
@@ -267,20 +214,6 @@ def api_log_pick():
 @app.route("/api/update_results", methods=["POST"])
 @require_api_secret
 def api_update_results():
-    """
-    Expected JSON body:
-    {
-        "date": "2026-05-16",
-        "results": [
-            {
-                "away_team": "New York Yankees",
-                "home_team": "Boston Red Sox",
-                "result":    "W"
-            },
-            ...
-        ]
-    }
-    """
     data = request.get_json(force=True, silent=True)
     if not data or "date" not in data or "results" not in data:
         abort(400, "JSON body with 'date' and 'results' required")
@@ -307,44 +240,6 @@ def api_update_results():
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "ts": datetime.utcnow().isoformat()})
-
-
-# ── Debug endpoint ────────────────────────────────────────────────────────────────
-@app.route("/debug")
-def debug_info():
-    import httpx
-    url_safe = SUPABASE_URL[:40] + "..." if len(SUPABASE_URL) > 40 else SUPABASE_URL
-    key_safe = SUPABASE_KEY[:12] + "..." if len(SUPABASE_KEY) > 12 else "MISSING"
-    results  = {}
-
-    # Test 1: raw HTTP call bypassing supabase-py
-    try:
-        rest_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/picks?select=id&limit=1"
-        headers  = {
-            "apikey":        SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
-        }
-        r = httpx.get(rest_url, headers=headers, timeout=10)
-        results["raw_http"] = {
-            "status":   r.status_code,
-            "url":      rest_url,
-            "response": r.text[:500],
-        }
-    except Exception as e:
-        results["raw_http"] = {"error": str(e)}
-
-    # Test 2: supabase-py client
-    try:
-        resp = supabase.table("picks").select("id").limit(1).execute()
-        results["supabase_client"] = {"ok": True, "rows": resp.data}
-    except Exception as e:
-        results["supabase_client"] = {"error": str(e)}
-
-    return jsonify({
-        "url_prefix": url_safe,
-        "key_prefix": key_safe,
-        "results":    results,
-    })
 
 
 if __name__ == "__main__":
