@@ -262,26 +262,40 @@ def health():
 
 # ── Debug endpoint ────────────────────────────────────────────────────────────────
 @app.route("/debug")
-def debug():
-    import traceback
-    url_safe = SUPABASE_URL[:30] + "..." if len(SUPABASE_URL) > 30 else SUPABASE_URL
-    key_safe  = SUPABASE_KEY[:8] + "..." if len(SUPABASE_KEY) > 8 else "MISSING"
+def debug_info():
+    import httpx
+    url_safe = SUPABASE_URL[:40] + "..." if len(SUPABASE_URL) > 40 else SUPABASE_URL
+    key_safe = SUPABASE_KEY[:12] + "..." if len(SUPABASE_KEY) > 12 else "MISSING"
+    results  = {}
+
+    # Test 1: raw HTTP call bypassing supabase-py
+    try:
+        rest_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/picks?select=id&limit=1"
+        headers  = {
+            "apikey":        SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+        }
+        r = httpx.get(rest_url, headers=headers, timeout=10)
+        results["raw_http"] = {
+            "status":   r.status_code,
+            "url":      rest_url,
+            "response": r.text[:500],
+        }
+    except Exception as e:
+        results["raw_http"] = {"error": str(e)}
+
+    # Test 2: supabase-py client
     try:
         resp = supabase.table("picks").select("id").limit(1).execute()
-        return jsonify({
-            "supabase_url_prefix": url_safe,
-            "supabase_key_prefix": key_safe,
-            "query": "ok",
-            "rows": resp.data,
-        })
+        results["supabase_client"] = {"ok": True, "rows": resp.data}
     except Exception as e:
-        return jsonify({
-            "supabase_url_prefix": url_safe,
-            "supabase_key_prefix": key_safe,
-            "query": "error",
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-        }), 500
+        results["supabase_client"] = {"error": str(e)}
+
+    return jsonify({
+        "url_prefix": url_safe,
+        "key_prefix": key_safe,
+        "results":    results,
+    })
 
 
 if __name__ == "__main__":
