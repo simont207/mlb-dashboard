@@ -363,6 +363,18 @@
     }
 
     /* ERA section */
+    .lineup-warn {
+      background: rgba(255,68,68,0.08);
+      border: 1px solid rgba(255,68,68,0.28);
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 11px;
+      color: #ff7070;
+      margin-bottom: 10px;
+      line-height: 1.45;
+    }
+    .lineup-warn strong { color: #ff4444; }
+
     .era-section {
       background: var(--surface2);
       border-radius: 10px;
@@ -665,15 +677,24 @@
   </main>
 
   <nav>
-    <button class="tab-btn active" data-tab="today"><span class="icon">📅</span>Today</button>
-    <button class="tab-btn" data-tab="record"><span class="icon">📊</span>Record</button>
-    <button class="tab-btn" data-tab="history"><span class="icon">📜</span>History</button>
+    <button class="tab-btn active" data-tab="today">
+      <span class="icon">📅</span>Today
+    </button>
+    <button class="tab-btn" data-tab="record">
+      <span class="icon">📊</span>Record
+    </button>
+    <button class="tab-btn" data-tab="history">
+      <span class="icon">📜</span>History
+    </button>
     <button class="nav-action-btn" id="notif-btn-nav" onclick="handleNotifBtn()" title="Notifications">🔕</button>
     <button class="nav-action-btn" id="theme-btn-nav" onclick="toggleTheme()" title="Toggle theme">🌙</button>
   </nav>
 </div>
 
 <script>
+/* ══════════════════════════════════════════════════════════════════════
+   TEAM LOGOS
+══════════════════════════════════════════════════════════════════════ */
 const TEAM_IDS = {
   "Arizona Diamondbacks":109,"Atlanta Braves":144,"Baltimore Orioles":110,
   "Boston Red Sox":111,"Chicago Cubs":112,"Chicago White Sox":145,
@@ -694,7 +715,11 @@ function logoImg(name, size=38) {
   return `<img src="${url}" style="width:${size}px;height:${size}px;object-fit:contain;flex-shrink:0" onerror="this.style.opacity=0" alt="">`;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   THEME
+══════════════════════════════════════════════════════════════════════ */
 let chartInst = null;
+
 function getTheme() { return localStorage.getItem('theme') || 'dark'; }
 function applyTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
@@ -712,11 +737,16 @@ function applyTheme(t) {
 function toggleTheme() { applyTheme(getTheme() === 'dark' ? 'light' : 'dark'); }
 applyTheme(getTheme());
 
+/* ══════════════════════════════════════════════════════════════════════
+   PUSH NOTIFICATIONS
+══════════════════════════════════════════════════════════════════════ */
 function showToast(msg, duration = 3000) {
   const t = document.getElementById('notif-toast');
-  t.textContent = msg; t.classList.add('show');
+  t.textContent = msg;
+  t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), duration);
 }
+
 function updateNotifBtn() {
   const icon = !('Notification' in window) ? '🔕' : Notification.permission === 'granted' ? '🔔' : '🔕';
   const opacity = !('Notification' in window) ? '0.4' : '1';
@@ -725,35 +755,49 @@ function updateNotifBtn() {
     if (btn) { btn.textContent = icon; btn.style.opacity = opacity; }
   });
 }
+
 async function handleNotifBtn() {
   if (!('Notification' in window)) { showToast('Notifications not supported on this browser'); return; }
-  if (Notification.permission === 'granted') { showToast('🔔 Notifications are already on!'); }
-  else if (Notification.permission === 'denied') { showToast('Notifications blocked — enable in browser settings'); }
-  else {
+  if (Notification.permission === 'granted') {
+    showToast('🔔 Notifications are already on!');
+  } else if (Notification.permission === 'denied') {
+    showToast('Notifications blocked — enable in browser settings');
+  } else {
     const perm = await Notification.requestPermission();
     updateNotifBtn();
     if (perm === 'granted') showToast('🔔 Notifications enabled! You\'ll be alerted when picks drop.');
     else showToast('Notifications declined');
   }
 }
+
 function maybeNotify(picks) {
   if (!picks.length) return;
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   const today = new Date().toISOString().split('T')[0];
-  const key = 'notifSentDate';
+  const key   = 'notifSentDate';
   if (localStorage.getItem(key) === today) return;
   localStorage.setItem(key, today);
   const names = picks.map(p => p.pick.split(' ').pop()).join(', ');
-  try { new Notification(`⚾ ${picks.length} Pick${picks.length > 1 ? 's' : ''} Today!`, { body: names, icon: '/static/icon-192.png' }); } catch(e) {}
+  try {
+    new Notification(`⚾ ${picks.length} Pick${picks.length > 1 ? 's' : ''} Today!`, {
+      body: names,
+      icon: '/static/icon-192.png',
+    });
+  } catch(e) {}
 }
+
 updateNotifBtn();
 
+/* ══════════════════════════════════════════════════════════════════════
+   PICK REASONING
+══════════════════════════════════════════════════════════════════════ */
 function generateReasoning(p) {
   const isAway      = p.pick === p.away_team;
   const pickedTeam  = p.pick;
   const oppTeam     = isAway ? p.home_team : p.away_team;
   const pickedLast  = pickedTeam.split(' ').pop();
   const oppLast     = oppTeam.split(' ').pop();
+
   const pickedPitcher = isAway ? p.away_pitcher : p.home_pitcher;
   const oppPitcher    = isAway ? p.home_pitcher : p.away_pitcher;
   const pickedPLast   = (pickedPitcher || 'TBD').split(' ').pop();
@@ -762,24 +806,27 @@ function generateReasoning(p) {
   const oppERA        = isAway ? p.home_era        : p.away_era;
   const pickedL3      = isAway ? p.away_recent_era : p.home_recent_era;
   const oppL3         = isAway ? p.home_recent_era : p.away_recent_era;
+
   const edge    = p.margin || 0;
   const winProb = Math.min(Math.round(50 + edge * 13), 90);
 
   let edgeTierClass, edgeTierLabel;
-  if      (edge >= 2.5) { edgeTierClass = 'elite';     edgeTierLabel = '🔥 ELITE EDGE'; }
-  else if (edge >= 2.0) { edgeTierClass = 'elite';     edgeTierLabel = '💪 VERY STRONG'; }
-  else if (edge >= 1.5) { edgeTierClass = 'strong';    edgeTierLabel = '✅ STRONG EDGE'; }
-  else if (edge >= 1.25){ edgeTierClass = 'moderate';  edgeTierLabel = '📈 SOLID EDGE'; }
-  else                  { edgeTierClass = 'threshold';  edgeTierLabel = '⚡ QUALIFYING EDGE'; }
+  if      (edge >= 2.5) { edgeTierClass = 'elite';     edgeTierLabel = '🔥 ELITE EDGE';      }
+  else if (edge >= 2.0) { edgeTierClass = 'elite';     edgeTierLabel = '💪 VERY STRONG';     }
+  else if (edge >= 1.5) { edgeTierClass = 'strong';    edgeTierLabel = '✅ STRONG EDGE';     }
+  else if (edge >= 1.25){ edgeTierClass = 'moderate';  edgeTierLabel = '📈 SOLID EDGE';      }
+  else                  { edgeTierClass = 'threshold'; edgeTierLabel = '⚡ QUALIFYING EDGE'; }
 
   let valueStr = '';
   if (p.pick_odds) {
     const o = p.pick_odds;
     const impliedProb = o < 0 ? Math.round((-o / (-o + 100)) * 100) : Math.round((100 / (o + 100)) * 100);
     const diff = winProb - impliedProb;
-    valueStr = diff > 0
-      ? `<div class="rd-line good">📊 <strong>Model finds +${diff}% value</strong> — win probability ${winProb}% vs market implied ${impliedProb}%</div>`
-      : `<div class="rd-line neutral">📊 Model win probability: <strong>${winProb}%</strong> · Market implied: <strong>${impliedProb}%</strong></div>`;
+    if (diff > 0) {
+      valueStr = `<div class="rd-line good">📊 <strong>Model finds +${diff}% value</strong> — win probability ${winProb}% vs market implied ${impliedProb}%</div>`;
+    } else {
+      valueStr = `<div class="rd-line neutral">📊 Model win probability: <strong>${winProb}%</strong> · Market implied: <strong>${impliedProb}%</strong></div>`;
+    }
   } else {
     valueStr = `<div class="rd-line neutral">📊 Model win probability: <strong>${winProb}%</strong></div>`;
   }
@@ -798,8 +845,8 @@ function generateReasoning(p) {
       <div class="rd-line ${edge >= 1.5 ? 'good' : 'neutral'}">📐 Edge <strong>${edge.toFixed(2)}</strong> — ${edge >= 2.0 ? 'high-conviction play, strong position sizing appropriate' : edge >= 1.5 ? 'confident play, edge is well clear of threshold' : 'qualifying play — minimum edge requirement cleared, standard sizing'}</div>
     </div>`;
 
-  const pickedERAStr = pickedERA != null ? pickedERA.toFixed(2) : '—';
-  const oppERAStr    = oppERA    != null ? oppERA.toFixed(2)    : '—';
+  const pickedERAStr  = pickedERA != null ? pickedERA.toFixed(2) : '—';
+  const oppERAStr     = oppERA    != null ? oppERA.toFixed(2)    : '—';
   const pickedWinsERA = pickedERA != null && oppERA != null && pickedERA < oppERA;
 
   function l3Badge(l3, season) {
@@ -811,15 +858,24 @@ function generateReasoning(p) {
   let eraCompLine = '';
   if (pickedERA != null && oppERA != null) {
     const diff = Math.abs(pickedERA - oppERA).toFixed(2);
-    if (pickedERA < oppERA)      eraCompLine = `<div class="rd-line good">✅ <strong>${pickedPLast}</strong> holds the ERA edge — ${diff} lower than opposing starter</div>`;
-    else if (pickedERA > oppERA) eraCompLine = `<div class="rd-line warn">⚠️ <strong>${pickedPLast}</strong> ERA is ${diff} higher — pitching disadvantage noted, model edge overrides</div>`;
-    else                         eraCompLine = `<div class="rd-line neutral">ERA even between starters — model finds edge in team-level factors</div>`;
-  } else { eraCompLine = `<div class="rd-line neutral">Pitcher ERA data unavailable — model ran on available metrics</div>`; }
+    if (pickedERA < oppERA) {
+      eraCompLine = `<div class="rd-line good">✅ <strong>${pickedPLast}</strong> holds the ERA edge — ${diff} lower than opposing starter</div>`;
+    } else if (pickedERA > oppERA) {
+      eraCompLine = `<div class="rd-line warn">⚠️ <strong>${pickedPLast}</strong> ERA is ${diff} higher — pitching disadvantage noted, model edge overrides</div>`;
+    } else {
+      eraCompLine = `<div class="rd-line neutral">ERA even between starters — model finds edge in team-level factors</div>`;
+    }
+  } else {
+    eraCompLine = `<div class="rd-line neutral">Pitcher ERA data unavailable — model ran on available metrics</div>`;
+  }
 
   let l3Line = '';
   if (pickedL3 != null && pickedERA != null) {
-    if (pickedL3 < pickedERA)            l3Line = `<div class="rd-line good">🔥 <strong>${pickedPLast}</strong> trending hot — last 3 starts ERA (${pickedL3.toFixed(2)}) below season average</div>`;
-    else if (pickedL3 > pickedERA + 1.5) l3Line = `<div class="rd-line warn">❄️ <strong>${pickedPLast}</strong> recent form is cold — L3 ERA (${pickedL3.toFixed(2)}) above season average by ${(pickedL3 - pickedERA).toFixed(2)}</div>`;
+    if (pickedL3 < pickedERA) {
+      l3Line = `<div class="rd-line good">🔥 <strong>${pickedPLast}</strong> trending hot — last 3 starts ERA (${pickedL3.toFixed(2)}) below season average</div>`;
+    } else if (pickedL3 > pickedERA + 1.5) {
+      l3Line = `<div class="rd-line warn">❄️ <strong>${pickedPLast}</strong> recent form is cold — L3 ERA (${pickedL3.toFixed(2)}) above season average by ${(pickedL3 - pickedERA).toFixed(2)}</div>`;
+    }
   }
 
   const s2 = `
@@ -842,7 +898,8 @@ function generateReasoning(p) {
           ${l3Badge(oppL3, oppERA)}
         </div>
       </div>
-      ${eraCompLine}${l3Line}
+      ${eraCompLine}
+      ${l3Line}
     </div>`;
 
   const isPickHome = !isAway;
@@ -850,15 +907,21 @@ function generateReasoning(p) {
     <div class="rd-section">
       <div class="rd-section-title">🏟️ Game Context — Supporting Evidence</div>
       <div class="rd-line ${isPickHome ? 'good' : 'neutral'}">
-        ${isPickHome ? `🏠 <strong>${pickedLast}</strong> playing at home — model factors in home field advantage` : `✈️ <strong>${pickedLast}</strong> on the road — model accounts for travel and park factors`}
+        ${isPickHome
+          ? `🏠 <strong>${pickedLast}</strong> playing at home — model factors in home field advantage`
+          : `✈️ <strong>${pickedLast}</strong> on the road — model accounts for travel and park factors`}
       </div>
       <div class="rd-line neutral">📍 Full head-to-head: <strong>${p.away_team.split(' ').pop()}</strong> @ <strong>${p.home_team.split(' ').pop()}</strong> — all factors weighted and scored</div>
     </div>`;
 
   let verdictText;
-  if (edge >= 2.0)      verdictText = `The model carries <strong>very high conviction</strong> on <strong>${pickedLast} ML</strong>. An edge of ${edge.toFixed(2)} sits well above the qualifying threshold — this is among the strongest plays of the day. ERA matchup and game context reinforce the model's output.`;
-  else if (edge >= 1.5) verdictText = `<strong>${pickedLast} ML</strong> is a confident play. The edge of ${edge.toFixed(2)} clears the threshold comfortably, with the model's win probability consistently outpacing what the market is pricing in. Supporting factors are aligned.`;
-  else                  verdictText = `<strong>${pickedLast} ML</strong> qualifies on model edge at ${edge.toFixed(2)}. This is a threshold play — the model detects value the market hasn't fully priced. Standard position sizing recommended to reflect the narrower but real edge.`;
+  if (edge >= 2.0) {
+    verdictText = `The model carries <strong>very high conviction</strong> on <strong>${pickedLast} ML</strong>. An edge of ${edge.toFixed(2)} sits well above the qualifying threshold — this is among the strongest plays of the day. ERA matchup and game context reinforce the model's output.`;
+  } else if (edge >= 1.5) {
+    verdictText = `<strong>${pickedLast} ML</strong> is a confident play. The edge of ${edge.toFixed(2)} clears the threshold comfortably, with the model's win probability consistently outpacing what the market is pricing in. Supporting factors are aligned.`;
+  } else {
+    verdictText = `<strong>${pickedLast} ML</strong> qualifies on model edge at ${edge.toFixed(2)}. This is a threshold play — the model detects value the market hasn't fully priced. Standard position sizing recommended to reflect the narrower but real edge.`;
+  }
 
   return `${s1}${s2}${s3}
     <div class="rd-verdict">
@@ -867,6 +930,7 @@ function generateReasoning(p) {
     </div>`;
 }
 
+let openReasoningId = null;
 function toggleReasoning(id) {
   const btn  = document.getElementById(`rb-${id}`);
   const body = document.getElementById(`rd-${id}`);
@@ -877,6 +941,9 @@ function toggleReasoning(id) {
   btn.querySelector('.arrow').textContent = isOpen ? '▾' : '▴';
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   STATE & TABS
+══════════════════════════════════════════════════════════════════════ */
 let activeTab = 'today';
 const REFRESH = 5 * 60 * 1000;
 
@@ -893,10 +960,17 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
-async function fetchJSON(url) { const r = await fetch(url); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }
-function spinner()       { return '<div class="spinner"></div>'; }
-function setPanel(id, h) { document.getElementById(id).innerHTML = h; }
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+function spinner()        { return '<div class="spinner"></div>'; }
+function setPanel(id, h)  { document.getElementById(id).innerHTML = h; }
 
+/* ══════════════════════════════════════════════════════════════════════
+   ANIMATED COUNTERS
+══════════════════════════════════════════════════════════════════════ */
 function animateVal(el, target, decimals=0, prefix='', suffix='') {
   if (!el) return;
   const dur = 900, t0 = performance.now();
@@ -908,17 +982,22 @@ function animateVal(el, target, decimals=0, prefix='', suffix='') {
   }
   requestAnimationFrame(step);
 }
+
 function animateEdgeBars() {
   document.querySelectorAll('.edge-fill[data-pct]').forEach(el => {
     setTimeout(() => { el.style.width = el.dataset.pct + '%'; }, 100);
   });
 }
+
 function animatePctBars() {
   document.querySelectorAll('.pct-fill[data-pct]').forEach(el => {
     setTimeout(() => { el.style.width = el.dataset.pct + '%'; }, 200);
   });
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   LIVE SCORE TICKER
+══════════════════════════════════════════════════════════════════════ */
 async function loadLiveScores(myPicks) {
   try {
     const today = new Date().toISOString().split('T')[0];
@@ -926,7 +1005,9 @@ async function loadLiveScores(myPicks) {
     const data  = await fetch(url).then(r => r.json());
     const games = (data.dates || []).flatMap(d => d.games || []);
     if (!games.length) return '';
+
     const pickedTeams = new Set((myPicks || []).map(p => p.pick));
+
     const chips = games.map(g => {
       const away   = g.teams?.away?.team?.name || '';
       const home   = g.teams?.home?.team?.name || '';
@@ -935,32 +1016,158 @@ async function loadLiveScores(myPicks) {
       const state  = g.status?.abstractGameState || '';
       const inning = g.linescore?.currentInning;
       const half   = g.linescore?.inningHalf;
+
       let statusStr = '', statusCls = '';
-      if (state === 'Final') { statusStr = 'Final'; }
-      else if (state === 'Live') { statusStr = (half && inning) ? `${half === 'Top' ? '▲' : '▼'}${inning}` : 'Live'; statusCls = 'live'; }
-      else { try { statusStr = new Date(g.gameDate).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' }); } catch(e) { statusStr = 'Soon'; } }
+      if (state === 'Final') {
+        statusStr = 'Final'; statusCls = '';
+      } else if (state === 'Live') {
+        statusStr = (half && inning) ? `${half === 'Top' ? '▲' : '▼'}${inning}` : 'Live';
+        statusCls = 'live';
+      } else {
+        try {
+          const dt = new Date(g.gameDate);
+          statusStr = dt.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+        } catch(e) { statusStr = 'Soon'; }
+      }
+
       const isPick = pickedTeams.has(away) || pickedTeams.has(home);
       const showScore = state === 'Final' || state === 'Live';
+      const awayAbb = away.split(' ').pop();
+      const homeAbb = home.split(' ').pop();
+
       return `
         <div class="score-chip${isPick ? ' is-pick' : ''}">
           <div class="score-chip-teams">
-            <div class="score-team">${logoImg(away,14)} ${away.split(' ').pop()}</div>
-            ${showScore ? `<span class="score-runs">${awayR}<span class="score-sep">-</span>${homeR}</span>` : `<span class="score-sep" style="font-size:10px">vs</span>`}
-            <div class="score-team">${home.split(' ').pop()} ${logoImg(home,14)}</div>
+            <div class="score-team">${logoImg(away,14)} ${awayAbb}</div>
+            ${showScore
+              ? `<span class="score-runs">${awayR}<span class="score-sep">-</span>${homeR}</span>`
+              : `<span class="score-sep" style="font-size:10px">vs</span>`}
+            <div class="score-team">${homeAbb} ${logoImg(home,14)}</div>
           </div>
           <div class="score-status ${statusCls}">${statusStr}${isPick ? ' ⚾' : ''}</div>
         </div>`;
     }).join('');
-    return `<div class="ticker-wrap"><div class="ticker-label"><span class="live-dot"></span>Today's Scores</div><div class="ticker-scroll">${chips}</div></div>`;
+
+    return `
+      <div class="ticker-wrap">
+        <div class="ticker-label"><span class="live-dot"></span>Today's Scores</div>
+        <div class="ticker-scroll">${chips}</div>
+      </div>`;
   } catch(e) { return ''; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TODAY TAB
+══════════════════════════════════════════════════════════════════════ */
+/* ──────────────────────────────────────────────────────────────────────
+   LINEUP WARNING — client-side MLB API check
+   Fetches confirmed lineup cards and compares against each team's top
+   hitters by season OPS. Only fires when lineups are actually posted.
+────────────────────────────────────────────────────────────────────── */
+const _topHitterCache = {};
+async function _getTeamTopHitters(teamId, n=4) {
+  if (_topHitterCache[teamId]) return _topHitterCache[teamId];
+  try {
+    const yr  = new Date().getFullYear();
+    const url = `https://statsapi.mlb.com/api/v1/teams/${teamId}/roster?rosterType=active&season=${yr}&hydrate=person(stats(group=hitting,type=season,season=${yr}))`;
+    const data = await fetch(url).then(r => r.json());
+    const players = [];
+    for (const player of (data.roster || [])) {
+      const pos = player.position?.abbreviation || '';
+      if (['SP','RP','P','TWP'].includes(pos)) continue;
+      const person = player.person || {};
+      const name   = person.fullName || '';
+      const pid    = person.id;
+      for (const sg of (person.stats || [])) {
+        if (sg.group?.displayName !== 'hitting') continue;
+        for (const sp of (sg.splits || [])) {
+          const s   = sp.stat || {};
+          const ops = parseFloat(s.ops || 0) || 0;
+          const ab  = parseInt(s.atBats || 0) || 0;
+          if (ab >= 50) players.push({ name, id: pid, ops });
+        }
+      }
+    }
+    players.sort((a, b) => b.ops - a.ops);
+    const top = players.slice(0, n);
+    _topHitterCache[teamId] = top;
+    return top;
+  } catch(e) {
+    _topHitterCache[teamId] = [];
+    return [];
+  }
+}
+
+async function loadLineupWarnings(picks) {
+  if (!picks || !picks.length) return {};
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const schedData = await fetch(
+      `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=lineups&gameType=R`
+    ).then(r => r.json());
+
+    const gameLineups = {};
+    for (const de of (schedData.dates || [])) {
+      for (const g of (de.games || [])) {
+        const lup = g.lineups;
+        if (!lup) continue;
+        const awayIds = new Set((lup.awayPlayers || []).map(p => p.id));
+        const homeIds = new Set((lup.homePlayers || []).map(p => p.id));
+        if (awayIds.size || homeIds.size) {
+          gameLineups[g.gamePk] = {
+            away: awayIds, home: homeIds,
+            awayTeamId: g.teams?.away?.team?.id,
+            homeTeamId: g.teams?.home?.team?.id,
+          };
+        }
+      }
+    }
+    if (!Object.keys(gameLineups).length) return {};
+
+    const allGames = (schedData.dates || []).flatMap(d => d.games || []);
+    const warnings = {};
+
+    for (const p of picks) {
+      const game = allGames.find(g =>
+        g.teams?.away?.team?.name === p.away_team &&
+        g.teams?.home?.team?.name === p.home_team
+      );
+      if (!game) continue;
+      const lup = gameLineups[game.gamePk];
+      if (!lup) continue;
+
+      const pickKey = `${p.away_team}|${p.home_team}`;
+      const w = [];
+
+      const sides = [
+        { name: p.away_team, id: lup.awayTeamId, confirmed: lup.away },
+        { name: p.home_team, id: lup.homeTeamId, confirmed: lup.home },
+      ];
+      for (const side of sides) {
+        if (!side.id) continue;
+        const topHitters = await _getTeamTopHitters(side.id);
+        for (const h of topHitters) {
+          if (!side.confirmed.has(h.id)) {
+            w.push(`${side.name.split(' ').pop()}: ${h.name.split(' ').pop()} out`);
+          }
+        }
+      }
+      if (w.length) warnings[pickKey] = w;
+    }
+    return warnings;
+  } catch(e) {
+    console.warn('Lineup warning fetch failed:', e);
+    return {};
+  }
 }
 
 async function loadToday() {
   setPanel('panel-today', spinner());
   try {
-    const picks  = await fetchJSON('/api/today');
-    const ticker = await loadLiveScores(picks);
-    setPanel('panel-today', renderToday(picks, ticker));
+    const picks          = await fetchJSON('/api/today');
+    const ticker         = await loadLiveScores(picks);
+    const lineupWarnings = await loadLineupWarnings(picks);
+    setPanel('panel-today', renderToday(picks, ticker, lineupWarnings));
     animateEdgeBars();
     maybeNotify(picks);
   } catch(e) {
@@ -968,231 +1175,29 @@ async function loadToday() {
   }
 }
 
-function renderToday(picks, ticker='') {
+function renderToday(picks, ticker='', lineupWarnings={}) {
   const today = new Date().toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
+
   if (!picks.length) {
-    return `${ticker}<div style="text-align:center;padding:10px 4px 6px;font-size:13px;color:var(--muted)">${today}</div><div class="empty"><div class="big">⚾</div><p>No qualifying picks today</p></div>`;
+    return `${ticker}
+      <div style="text-align:center;padding:10px 4px 6px;font-size:13px;color:var(--muted)">${today}</div>
+      <div class="empty"><div class="big">⚾</div><p>No qualifying picks today</p></div>`;
   }
+
   const cards = picks.map((p, i) => {
     const oddsStr   = p.pick_odds ? `<span class="odds-chip">${toDecimalOdds(p.pick_odds)}</span>` : '';
     const marginStr = p.margin != null ? p.margin.toFixed(2) : '—';
     const edgePct   = Math.min((p.margin || 0) / 3.0 * 100, 100).toFixed(1);
     const reasoningHTML = generateReasoning(p);
+    const pickKey   = `${p.away_team}|${p.home_team}`;
+    const warns     = lineupWarnings[pickKey] || [];
+    const lineupWarnHTML = warns.length
+      ? `<div class="lineup-warn">🚨 <strong>KEY PLAYERS OUT:</strong> ${warns.join(' &nbsp;·&nbsp; ')}</div>`
+      : '';
+
     const awayCity = p.away_team.split(' ').slice(0,-1).join(' ');
     const awayName = p.away_team.split(' ').pop();
     const homeCity = p.home_team.split(' ').slice(0,-1).join(' ');
     const homeName = p.home_team.split(' ').pop();
-    const awayLast = (p.away_pitcher || '').split(' ').pop() || '—';
-    const homeLast = (p.home_pitcher || '').split(' ').pop() || '—';
-    const awayERA  = p.away_era != null ? p.away_era.toFixed(2) : '—';
-    const homeERA  = p.home_era != null ? p.home_era.toFixed(2) : '—';
-    const awayL3   = p.away_recent_era != null ? `<span class="era-l3"> · L3: ${p.away_recent_era.toFixed(2)}</span>` : '';
-    const homeL3   = p.home_recent_era != null ? `<span class="era-l3"> · L3: ${p.home_recent_era.toFixed(2)}</span>` : '';
-    return `
-      <div class="pick-card">
-        <div class="pick-card-accent"></div>
-        <div class="pick-card-body">
-          <div class="matchup-logos">
-            <div class="team-block away">
-              ${logoImg(p.away_team)}
-              <div class="team-info">
-                <div class="team-city">${awayCity}</div>
-                <div class="team-name">${awayName}</div>
-              </div>
-            </div>
-            <div class="vs-badge">@</div>
-            <div class="team-block home">
-              <div class="team-info" style="text-align:right">
-                <div class="team-city">${homeCity}</div>
-                <div class="team-name">${homeName}</div>
-              </div>
-              ${logoImg(p.home_team)}
-            </div>
-          </div>
-          <div class="pick-winner-row">
-            <div class="pick-winner-line">✅ ${p.pick.split(' ').pop()} ML ${oddsStr}</div>
-          </div>
-          <div class="edge-bar-wrap">
-            <div class="edge-bar-label">
-              <span>Model Edge</span>
-              <span style="color:var(--text);font-weight:700">${marginStr}</span>
-            </div>
-            <div class="edge-bar"><div class="edge-fill" data-pct="${edgePct}"></div></div>
-          </div>
-          <div class="era-section">
-            <div class="era-row">
-              <span class="era-name">📉 ${awayLast}</span>
-              <span><span class="era-val">${awayERA}</span> ERA${awayL3}</span>
-            </div>
-            <div class="era-row">
-              <span class="era-name">📈 ${homeLast}</span>
-              <span><span class="era-val">${homeERA}</span> ERA${homeL3}</span>
-            </div>
-          </div>
-          <button class="reasoning-toggle" id="rb-${i}" onclick="toggleReasoning(${i})">
-            <span>🧠 Why this pick?</span>
-            <span class="arrow">▾</span>
-          </button>
-          <div class="reasoning-body" id="rd-${i}">${reasoningHTML}</div>
-        </div>
-      </div>`;
-  }).join('');
-  return `${ticker}<div style="text-align:center;padding:6px 4px 2px;font-size:13px;color:var(--muted)">${today}</div><div class="refresh-note">Auto-refreshes every 5 min</div>${cards}`;
-}
 
-async function loadRecord() {
-  setPanel('panel-record', spinner());
-  try {
-    const [rec, chartPts, allPicks] = await Promise.all([fetchJSON('/api/record'), fetchJSON('/api/chart'), fetchJSON('/api/picks')]);
-    setPanel('panel-record', renderRecord(rec, allPicks));
-    renderChart(chartPts);
-    animatePctBars();
-    animateVal(document.getElementById('anim-wins'),   rec.wins,   0);
-    animateVal(document.getElementById('anim-losses'), rec.losses, 0);
-    animateVal(document.getElementById('anim-pushes'), rec.pushes, 0);
-    animateVal(document.getElementById('anim-roi'),    Math.abs(rec.roi), 1, rec.roi >= 0 ? '+' : '-', '%');
-    animateVal(document.getElementById('anim-profit'), Math.abs(rec.profit), 0, rec.profit >= 0 ? '+$' : '-$');
-  } catch(e) { setPanel('panel-record', `<div class="empty"><p>Failed to load: ${e.message}</p></div>`); }
-}
-
-function getThisWeek(picks) {
-  const now = new Date(), day = now.getDay();
-  const start = new Date(now); start.setDate(now.getDate() - day); start.setHours(0,0,0,0);
-  let w=0, l=0, p=0;
-  for (const pick of picks) {
-    if (!pick.date) continue;
-    if (new Date(pick.date + 'T00:00:00') >= start) {
-      const r = (pick.result||'').toUpperCase();
-      if (r==='W') w++; else if (r==='L') l++; else if (r==='P') p++;
-    }
-  }
-  return { w, l, p };
-}
-
-function renderRecord(r, allPicks) {
-  const winColor    = r.win_pct >= 52 ? 'green' : 'red';
-  const profitColor = r.profit  >= 0  ? 'green' : 'red';
-  const roiColor    = r.roi     >= 0  ? 'green' : 'red';
-  const winPctPct   = Math.min(r.win_pct, 100).toFixed(1);
-  const week        = getThisWeek(allPicks);
-  const weekPct     = (week.w + week.l) > 0 ? (week.w / (week.w + week.l) * 100).toFixed(0) + '%' : '—';
-  let streakHtml = '';
-  if (r.streak > 0 && r.streak_type) {
-    const cls = r.streak_type === 'W' ? 'streak-w' : 'streak-l';
-    const lbl = r.streak_type === 'W' ? `🔥 ${r.streak}-Game Win Streak` : `❄️ ${r.streak}-Game Losing Streak`;
-    streakHtml = `<div style="margin-top:10px"><span class="streak-badge ${cls}">${lbl}</span></div>`;
-  }
-  return `
-    <div class="record-hero">
-      <div class="wlp">
-        <div class="wlp-item win"><div class="wlp-num" id="anim-wins">${r.wins}</div><div class="wlp-lbl">Wins</div></div>
-        <div class="wlp-item loss"><div class="wlp-num" id="anim-losses">${r.losses}</div><div class="wlp-lbl">Losses</div></div>
-        <div class="wlp-item push"><div class="wlp-num" id="anim-pushes">${r.pushes}</div><div class="wlp-lbl">Pushes</div></div>
-      </div>
-      ${streakHtml}
-    </div>
-    <div class="win-pct-bar-wrap">
-      <div class="win-pct-header">
-        <span class="win-pct-title">Win Rate</span>
-        <span class="win-pct-val ${winColor}">${r.win_pct}%</span>
-      </div>
-      <div class="pct-bar"><div class="pct-fill ${winColor}" data-pct="${winPctPct}"></div></div>
-      <div class="pct-markers"><span>0%</span><span style="color:var(--accent);font-weight:700">Break-even: 52.4%</span><span>100%</span></div>
-    </div>
-    <div class="stats-grid">
-      <div class="stat-box"><div class="stat-val ${roiColor}" id="anim-roi">${r.roi >= 0 ? '+' : ''}${r.roi}%</div><div class="stat-lbl">ROI</div></div>
-      <div class="stat-box"><div class="stat-val ${profitColor}" id="anim-profit">${r.profit >= 0 ? '+' : '-'}$${Math.abs(r.profit)}</div><div class="stat-lbl">Profit (units)</div></div>
-    </div>
-    <div class="week-box">
-      <h3>📅 This Week</h3>
-      <div class="week-record">
-        <div class="week-item w"><div class="week-num">${week.w}</div><div class="week-lbl">Wins</div></div>
-        <div class="week-item l"><div class="week-num">${week.l}</div><div class="week-lbl">Losses</div></div>
-        <div class="week-item p"><div class="week-num">${week.p}</div><div class="week-lbl">Pushes</div></div>
-        <div class="week-item" style="background:var(--surface2)"><div class="week-num" style="color:var(--text)">${weekPct}</div><div class="week-lbl">Win %</div></div>
-      </div>
-    </div>
-    <div class="chart-card">
-      <h3>Cumulative Profit</h3>
-      <div class="chart-wrap"><canvas id="profit-chart"></canvas></div>
-    </div>`;
-}
-
-function renderChart(points) {
-  const ctx = document.getElementById('profit-chart');
-  if (!ctx) return;
-  if (chartInst) { chartInst.destroy(); chartInst = null; }
-  if (!points.length) { ctx.parentElement.innerHTML = '<div class="empty" style="padding:20px"><p>No completed picks yet</p></div>'; return; }
-  const theme  = getTheme();
-  const labels = points.map(p => { const d = new Date(p.date+'T00:00:00'); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
-  const data   = points.map(p => p.profit);
-  const last   = data[data.length-1] ?? 0;
-  const color  = last >= 0 ? '#00e676' : '#ff4444';
-  const gridC  = theme === 'dark' ? '#1a1a1a' : '#e5e7eb';
-  const tickC  = theme === 'dark' ? '#555' : '#9ca3af';
-  chartInst = new Chart(ctx, {
-    type: 'line',
-    data: { labels, datasets: [{ data, borderColor: color, backgroundColor: last >= 0 ? 'rgba(0,230,118,0.08)' : 'rgba(255,68,68,0.08)', borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, fill: true, tension: 0.4 }]},
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode:'index', intersect:false },
-      animation: { duration:1000, easing:'easeOutQuart' },
-      plugins: { legend: { display: false }, tooltip: { backgroundColor:'#1e1e1e', borderColor:'#333', borderWidth:1, titleColor:'#aaa', bodyColor:color, padding:10, callbacks: { label: ctx => ` ${ctx.raw>=0?'+':''}$${ctx.raw.toFixed(0)}` } } },
-      scales: {
-        x: { ticks:{color:tickC,font:{size:10},maxTicksLimit:6}, grid:{color:gridC} },
-        y: { ticks:{color:tickC,font:{size:10},callback:v=>(v>=0?'+':'')+'$'+v}, grid:{color:gridC} }
-      }
-    }
-  });
-}
-
-async function loadHistory() {
-  setPanel('panel-history', spinner());
-  try {
-    const picks = await fetchJSON('/api/picks');
-    setPanel('panel-history', renderHistory(picks));
-  } catch(e) { setPanel('panel-history', `<div class="empty"><p>Failed to load: ${e.message}</p></div>`); }
-}
-
-function renderHistory(picks) {
-  if (!picks.length) return `<div class="empty"><div class="big">📜</div><p>No pick history yet</p></div>`;
-  const rows = picks.map(p => {
-    const r      = (p.result||'').toUpperCase();
-    const resCls = r==='W'?'result-w':r==='L'?'result-l':'result-p';
-    const margin = p.margin!=null ? p.margin.toFixed(2) : '—';
-    const odds   = toDecimalOdds(p.pick_odds) || '—';
-    const lA = logoUrl(p.away_team), lH = logoUrl(p.home_team);
-    const imgA = lA ? `<img src="${lA}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">` : '';
-    const imgH = lH ? `<img src="${lH}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">` : '';
-    return `<tr><td>${formatDate(p.date)}</td><td>${imgA}${abbrev(p.away_team)} @ ${imgH}${abbrev(p.home_team)}</td><td>${abbrev(p.pick)}</td><td>${odds}</td><td>${margin}</td><td class="${resCls}">${r||'—'}</td></tr>`;
-  }).join('');
-  return `<div class="hist-table-wrap"><table><thead><tr><th>Date</th><th>Matchup</th><th>Pick</th><th>Odds</th><th>Edge</th><th>Result</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-}
-
-function toDecimalOdds(s) {
-  if (!s) return '';
-  const v = parseFloat(s);
-  if (isNaN(v)) return s;
-  if (v <= -100) return (1 + 100/Math.abs(v)).toFixed(2);
-  if (v >= 100)  return (1 + v/100).toFixed(2);
-  return v.toFixed(2);
-}
-function formatDate(d) { if (!d) return '—'; return new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
-function abbrev(name) { if (!name) return '—'; const p = name.split(' '); return p.length >= 2 ? p[p.length-1] : name; }
-
-function loadTab(tab) {
-  if (tab==='today')   loadToday();
-  if (tab==='record')  loadRecord();
-  if (tab==='history') loadHistory();
-}
-function refreshAll() {
-  loadTab(activeTab);
-  document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-}
-
-refreshAll();
-setInterval(refreshAll, REFRESH);
-if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js').catch(() => {}); }
-</script>
-</body>
-</html>
+   
