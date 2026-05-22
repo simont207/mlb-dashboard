@@ -169,8 +169,11 @@
     .score-chip {
       flex-shrink: 0; background: var(--surface); border: 1px solid var(--border);
       border-radius: 12px; padding: 8px 10px; min-width: 134px;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, transform 0.15s, box-shadow 0.15s;
+      text-decoration: none; color: inherit; display: block; cursor: pointer;
     }
+    .score-chip:hover { border-color: var(--accent2); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .score-chip:active { transform: scale(0.97); }
     .score-chip.is-pick { border-color: var(--accent2); background: rgba(0,179,89,0.06); }
     .score-chip-teams { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
     .score-team { display: flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700; }
@@ -929,14 +932,16 @@ async function loadLiveScores(myPicks) {
       const showScore=state==='Final'||state==='Live';
       const awayAbb=away.split(' ').pop();
       const homeAbb=home.split(' ').pop();
-      return `<div class="score-chip${isPick?' is-pick':''}">
+      const gamePk=g.gamePk||'';
+      const mlbUrl=gamePk?`https://www.mlb.com/gameday/${gamePk}`:'#';
+      return `<a class="score-chip${isPick?' is-pick':''}" href="${mlbUrl}" target="_blank" rel="noopener noreferrer">
         <div class="score-chip-teams">
           <div class="score-team">${logoImg(away,14)} ${awayAbb}</div>
           ${showScore?`<span class="score-runs">${awayR}<span class="score-sep">-</span>${homeR}</span>`:`<span class="score-sep" style="font-size:10px">vs</span>`}
           <div class="score-team">${homeAbb} ${logoImg(home,14)}</div>
         </div>
         <div class="score-status ${statusCls}">${statusStr}${isPick?' ⚾':''}</div>
-      </div>`;
+      </a>`;
     }).join('');
 
     const ticker=`<div class="ticker-wrap">
