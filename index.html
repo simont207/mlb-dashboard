@@ -14,178 +14,532 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* ── Dark theme (default) ───────────────────────────────────────── */
     :root, [data-theme="dark"] {
-      --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e; --border: #252525;
-      --accent: #00e676; --accent2: #00b359; --text: #f0f0f0; --muted: #777;
-      --win: #00e676; --loss: #ff4444; --push: #888;
-      --shadow: rgba(0,0,0,0.4); --chart-grid: #1a1a1a; --chart-tick: #555;
+      --bg:       #0a0a0a;
+      --surface:  #141414;
+      --surface2: #1e1e1e;
+      --border:   #252525;
+      --accent:   #00e676;
+      --accent2:  #00b359;
+      --text:     #f0f0f0;
+      --muted:    #777;
+      --win:      #00e676;
+      --loss:     #ff4444;
+      --push:     #888;
+      --shadow:   rgba(0,0,0,0.4);
+      --chart-grid: #1a1a1a;
+      --chart-tick: #555;
     }
+
+    /* ── Light theme ────────────────────────────────────────────────── */
     [data-theme="light"] {
-      --bg: #f2f4f7; --surface: #ffffff; --surface2: #eef0f4; --border: #dde1e9;
-      --accent: #00a04a; --accent2: #007a38; --text: #111827; --muted: #6b7280;
-      --win: #00a04a; --loss: #dc2626; --push: #9ca3af;
-      --shadow: rgba(0,0,0,0.1); --chart-grid: #e5e7eb; --chart-tick: #9ca3af;
+      --bg:       #f2f4f7;
+      --surface:  #ffffff;
+      --surface2: #eef0f4;
+      --border:   #dde1e9;
+      --accent:   #00a04a;
+      --accent2:  #007a38;
+      --text:     #111827;
+      --muted:    #6b7280;
+      --win:      #00a04a;
+      --loss:     #dc2626;
+      --push:     #9ca3af;
+      --shadow:   rgba(0,0,0,0.1);
+      --chart-grid: #e5e7eb;
+      --chart-tick: #9ca3af;
     }
 
     html, body {
-      height: 100%; background: var(--bg); color: var(--text);
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased;
-      overscroll-behavior: none; transition: background 0.3s, color 0.3s;
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
+      transition: background 0.3s, color 0.3s;
     }
-    #app { display: flex; flex-direction: column; height: 100%; max-width: 480px; margin: 0 auto; }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+    }
 
     /* ── Header ─────────────────────────────────────────────────────── */
     header {
       padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 10px;
       border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; gap: 10px;
-      position: sticky; top: 0; background: var(--bg); z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 10;
       transition: background 0.3s, border-color 0.3s;
     }
+
     .header-logo {
-      width: 34px; height: 34px;
+      width: 34px;
+      height: 34px;
       background: linear-gradient(135deg, var(--accent2), var(--accent));
-      border-radius: 10px; display: flex; align-items: center; justify-content: center;
-      font-size: 18px; flex-shrink: 0;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
     }
-    header h1 { font-size: 17px; font-weight: 800; letter-spacing: -0.3px; flex: 1; }
-    .header-actions { display: flex; align-items: center; gap: 6px; }
+
+    header h1 {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      flex: 1;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .icon-btn {
-      width: 34px; height: 34px; border-radius: 10px;
-      background: var(--surface2); border: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 16px; cursor: pointer;
-      -webkit-tap-highlight-color: transparent; transition: background 0.15s, transform 0.1s;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s, transform 0.1s;
     }
     .icon-btn:active { transform: scale(0.92); }
-    .subtitle { font-size: 10px; color: var(--muted); white-space: nowrap; }
+
+    .subtitle {
+      font-size: 10px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
 
     /* ── Content ────────────────────────────────────────────────────── */
     .content {
-      flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
       padding: 12px 12px calc(60px + env(safe-area-inset-bottom, 0px) + 12px);
     }
 
     /* ── Tab bar ────────────────────────────────────────────────────── */
     nav {
-      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
-      width: 100%; max-width: 480px;
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 480px;
       height: calc(60px + env(safe-area-inset-bottom, 0px));
-      background: var(--surface); border-top: 1px solid var(--border);
-      display: flex; padding-bottom: env(safe-area-inset-bottom, 0px);
-      z-index: 20; transition: background 0.3s, border-color 0.3s;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      z-index: 20;
+      transition: background 0.3s, border-color 0.3s;
     }
+
     .tab-btn {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 3px;
-      background: none; border: none; color: var(--muted);
-      font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
-      cursor: pointer; transition: color 0.15s; -webkit-tap-highlight-color: transparent;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color 0.15s;
+      -webkit-tap-highlight-color: transparent;
     }
     .tab-btn .icon { font-size: 22px; line-height: 1; }
     .tab-btn.active { color: var(--accent); }
+
+    /* Action buttons inside nav (mobile only — hidden on desktop) */
+    .nav-action-btn {
+      flex: 0 0 52px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: none;
+      border-left: 1px solid var(--border);
+      font-size: 22px;
+      cursor: pointer;
+      color: var(--muted);
+      -webkit-tap-highlight-color: transparent;
+      transition: color 0.15s, opacity 0.15s;
+    }
+    .nav-action-btn:active { opacity: 0.5; }
+
     .panel { display: none; }
     .panel.active { display: block; }
 
-    /* ── Toast ──────────────────────────────────────────────────────── */
+    /* ── Notification toast ─────────────────────────────────────────── */
     .notif-toast {
-      position: fixed; top: 70px; left: 50%;
+      position: fixed;
+      top: 70px;
+      left: 50%;
       transform: translateX(-50%) translateY(-20px);
-      background: var(--accent); color: #000; font-size: 13px; font-weight: 700;
-      padding: 10px 18px; border-radius: 20px; z-index: 100; opacity: 0;
-      transition: opacity 0.3s, transform 0.3s; pointer-events: none;
-      max-width: 320px; text-align: center; box-shadow: 0 4px 20px rgba(0,230,118,0.3);
+      background: var(--accent);
+      color: #000;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 10px 18px;
+      border-radius: 20px;
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.3s, transform 0.3s;
+      pointer-events: none;
+      max-width: 320px;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0,230,118,0.3);
     }
-    .notif-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .notif-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
 
-    /* ── Ticker ─────────────────────────────────────────────────────── */
+    /* ── Live Score Ticker ──────────────────────────────────────────── */
     .ticker-wrap { margin-bottom: 12px; }
-    .ticker-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
-    .live-dot { width: 6px; height: 6px; background: #ff4444; border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
+
+    .ticker-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .live-dot {
+      width: 6px;
+      height: 6px;
+      background: #ff4444;
+      border-radius: 50%;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
-    .ticker-scroll { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; scrollbar-width: none; }
+
+    .ticker-scroll {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
     .ticker-scroll::-webkit-scrollbar { display: none; }
-    .score-chip { flex-shrink: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; min-width: 134px; }
-    .score-chip.is-pick { border-color: var(--accent2); background: rgba(0,179,89,0.06); }
-    .score-chip-teams { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
-    .score-team { display: flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700; }
+
+    .score-chip {
+      flex-shrink: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 10px;
+      min-width: 134px;
+      transition: border-color 0.2s;
+    }
+    .score-chip.is-pick {
+      border-color: var(--accent2);
+      background: rgba(0,179,89,0.06);
+    }
+    .score-chip-teams {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 3px;
+    }
+    .score-team {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      font-weight: 700;
+    }
     .score-runs { font-weight: 900; font-size: 12px; color: var(--text); }
-    .score-sep { font-size: 10px; color: var(--muted); }
+    .score-sep  { font-size: 10px; color: var(--muted); }
     .score-status { font-size: 10px; color: var(--muted); text-align: center; }
     .score-status.live { color: #ff6b6b; font-weight: 700; }
 
     /* ── Pick Cards ─────────────────────────────────────────────────── */
-    .pick-card { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; margin-bottom: 12px; overflow: hidden; transition: transform 0.15s, background 0.3s; }
+    .pick-card {
+      display: flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.15s, background 0.3s;
+    }
     .pick-card:active { transform: scale(0.985); }
-    .pick-card-accent { width: 4px; background: linear-gradient(180deg, var(--accent), var(--accent2)); flex-shrink: 0; }
+
+    .pick-card-accent {
+      width: 4px;
+      background: linear-gradient(180deg, var(--accent), var(--accent2));
+      flex-shrink: 0;
+    }
+
     .pick-card-body { flex: 1; padding: 14px; }
-    .matchup-logos { display: flex; align-items: center; margin-bottom: 12px; }
+
+    /* Matchup logos row */
+    .matchup-logos {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+    }
     .team-block { flex: 1; display: flex; align-items: center; gap: 8px; }
-    .team-block.home { flex-direction: row-reverse; }
+    .team-block.home { flex-direction: row-reverse; text-align: right; }
     .team-logo { width: 38px; height: 38px; object-fit: contain; flex-shrink: 0; }
     .team-info { flex: 1; }
     .team-city { font-size: 10px; color: var(--muted); line-height: 1.2; }
     .team-name { font-size: 13px; font-weight: 800; line-height: 1.2; }
-    .vs-badge { width: 26px; height: 26px; background: var(--surface2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: var(--muted); flex-shrink: 0; margin: 0 6px; }
-    .pick-winner-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-    .pick-winner-line { font-size: 15px; font-weight: 800; color: var(--accent); display: flex; align-items: center; gap: 8px; }
-    .odds-chip { display: inline-block; background: rgba(0,179,89,0.12); border: 1px solid rgba(0,179,89,0.3); border-radius: 6px; padding: 1px 7px; font-size: 11px; font-weight: 700; color: var(--accent); }
+    .vs-badge {
+      width: 26px; height: 26px;
+      background: var(--surface2);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 800; color: var(--muted);
+      flex-shrink: 0; margin: 0 6px;
+    }
+
+    /* Pick line */
+    .pick-winner-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .pick-winner-line {
+      font-size: 15px; font-weight: 800; color: var(--accent);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .odds-chip {
+      display: inline-block;
+      background: rgba(0,179,89,0.12);
+      border: 1px solid rgba(0,179,89,0.3);
+      border-radius: 6px;
+      padding: 1px 7px;
+      font-size: 11px; font-weight: 700; color: var(--accent);
+    }
+
+    /* Confidence meter */
     .conf-meter { flex-shrink: 0; line-height: 0; }
     .conf-meter svg { display: block; }
     .conf-meter svg circle { transition: stroke-dashoffset 1.3s cubic-bezier(0.4,0,0.2,1); }
+
+    /* Edge bar */
     .edge-bar-wrap { margin-bottom: 10px; }
-    .edge-bar-label { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+    .edge-bar-label {
+      display: flex; justify-content: space-between;
+      font-size: 10px; color: var(--muted); margin-bottom: 4px;
+    }
     .edge-bar { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
-    .edge-fill { height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent)); border-radius: 3px; width: 0; transition: width 1.3s cubic-bezier(0.4,0,0.2,1); }
-    .era-section { background: var(--surface2); border-radius: 10px; padding: 8px 10px; font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+    .edge-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      border-radius: 3px; width: 0;
+      transition: width 1.3s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    /* ERA section */
+    .era-section {
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
     .era-row { display: flex; justify-content: space-between; align-items: center; }
     .era-row + .era-row { margin-top: 4px; }
     .era-name { font-weight: 600; }
-    .era-val { font-weight: 800; color: var(--text); }
-    .era-l3 { color: var(--muted); font-size: 10px; }
-    .reasoning-toggle { width: 100%; background: none; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; text-align: left; display: flex; align-items: center; justify-content: space-between; -webkit-tap-highlight-color: transparent; transition: background 0.15s, border-color 0.15s; }
+    .era-val  { font-weight: 800; color: var(--text); }
+    .era-l3   { color: var(--muted); font-size: 10px; }
+
+    /* Reasoning toggle */
+    .reasoning-toggle {
+      width: 100%;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s, border-color 0.15s;
+    }
     .reasoning-toggle:hover { background: var(--surface2); border-color: var(--accent2); }
-    .reasoning-toggle .arrow { transition: transform 0.25s; }
+    .reasoning-toggle .arrow { transition: transform 0.25s; font-style: normal; }
     .reasoning-toggle.open .arrow { transform: rotate(180deg); }
-    .reasoning-body { display: none; margin-top: 8px; background: var(--surface2); border-radius: 10px; padding: 10px 12px; font-size: 12px; color: var(--muted); }
+
+    .reasoning-body {
+      display: none;
+      margin-top: 8px;
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
     .reasoning-body.open { display: block; }
-    .reasoning-body ul { list-style: none; }
-    .reasoning-body ul li { padding: 3px 0; }
-    .reasoning-body ul li::before { content: '→ '; color: var(--accent); font-weight: 700; }
+
+    /* ── Pro Reasoning Breakdown ─────────────────────────────────────── */
+    .rd-section { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .rd-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .rd-section-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--text); margin-bottom: 8px; }
+
+    /* Pitcher head-to-head */
+    .rd-pitcher-row { display: flex; align-items: stretch; gap: 6px; margin-bottom: 8px; }
+    .rd-pitcher { flex: 1; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 6px; }
+    .rd-pitcher.rd-win { border-color: var(--accent2); background: rgba(0,179,89,0.07); }
+    .rd-pitcher-name { font-size: 12px; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rd-pitcher-team { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+    .rd-era-big { font-size: 24px; font-weight: 900; line-height: 1; color: var(--text); }
+    .rd-era-lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+    .rd-l3 { font-size: 10px; font-weight: 700; margin-top: 5px; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+    .rd-l3.hot  { background: rgba(0,230,118,0.15); color: var(--win); }
+    .rd-l3.cold { background: rgba(255,68,68,0.15);  color: var(--loss); }
+    .rd-l3.flat { background: var(--surface2); color: var(--muted); }
+    .rd-vs { font-size: 10px; font-weight: 900; color: var(--muted); flex-shrink: 0; display: flex; align-items: center; }
+
+    /* Verdict lines */
+    .rd-line { font-size: 11px; line-height: 1.55; padding: 5px 8px; border-radius: 6px; margin-bottom: 4px; }
+    .rd-line:last-child { margin-bottom: 0; }
+    .rd-line.good    { background: rgba(0,230,118,0.08); color: var(--text); }
+    .rd-line.warn    { background: rgba(255,180,0,0.08); color: var(--text); }
+    .rd-line.bad     { background: rgba(255,68,68,0.08);  color: var(--text); }
+    .rd-line.neutral { background: var(--surface); color: var(--muted); }
+    .rd-line strong  { color: var(--text); font-weight: 800; }
+
+    /* Model stats grid */
+    .rd-stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 5px; margin-bottom: 8px; }
+    .rd-stat { text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 4px; }
+    .rd-stat-val { font-size: 14px; font-weight: 900; color: var(--text); }
+    .rd-stat-lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 1px; }
+
+    /* Badge */
+    .rd-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; margin-bottom: 8px; }
+
+    /* Verdict box */
+    .rd-verdict { background: var(--surface); border-radius: 10px; padding: 10px 12px; border-left: 3px solid var(--accent); }
+    .rd-verdict-title { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 5px; }
+    .rd-verdict-text { font-size: 12px; line-height: 1.55; }
+
+    /* Model Edge Hero */
+    .rd-edge-hero { background: linear-gradient(135deg, rgba(0,179,89,0.12), rgba(0,230,118,0.05)); border: 1px solid var(--accent2); border-radius: 12px; padding: 14px; margin-bottom: 8px; text-align: center; }
+    .rd-edge-hero-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); margin-bottom: 2px; }
+    .rd-edge-score { font-size: 44px; font-weight: 900; line-height: 1; color: var(--accent); letter-spacing: -2px; }
+    .rd-edge-desc { font-size: 10px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
+    .rd-edge-tier { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; margin-top: 7px; margin-bottom: 2px; }
+    .rd-edge-tier.elite    { background: rgba(0,230,118,0.2); color: var(--win); border: 1px solid rgba(0,179,89,0.5); }
+    .rd-edge-tier.strong   { background: rgba(0,230,118,0.15); color: var(--win); }
+    .rd-edge-tier.moderate { background: rgba(255,180,0,0.15); color: #ffb400; }
+    .rd-edge-tier.threshold { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
 
     /* ── Record tab ─────────────────────────────────────────────────── */
-    .record-hero { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 22px 20px 18px; text-align: center; margin-bottom: 10px; position: relative; overflow: hidden; }
-    .record-hero::before { content: ''; position: absolute; top: -50px; left: 50%; transform: translateX(-50%); width: 220px; height: 220px; background: radial-gradient(circle, rgba(0,230,118,0.07) 0%, transparent 70%); pointer-events: none; }
+    .record-hero {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 22px 20px 18px;
+      text-align: center;
+      margin-bottom: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    .record-hero::before {
+      content: '';
+      position: absolute;
+      top: -50px; left: 50%; transform: translateX(-50%);
+      width: 220px; height: 220px;
+      background: radial-gradient(circle, rgba(0,230,118,0.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
     .wlp { display: flex; justify-content: center; margin-bottom: 12px; }
     .wlp-item { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
-    .wlp-item + .wlp-item::before { content: ''; position: absolute; left: 0; top: 10%; height: 80%; width: 1px; background: var(--border); }
+    .wlp-item + .wlp-item::before {
+      content: ''; position: absolute; left: 0; top: 10%; height: 80%; width: 1px; background: var(--border);
+    }
     .wlp-num { font-size: 44px; font-weight: 900; line-height: 1; letter-spacing: -2px; }
     .wlp-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 4px; }
     .wlp-item.win  .wlp-num { color: var(--win); }
     .wlp-item.loss .wlp-num { color: var(--loss); }
     .wlp-item.push .wlp-num { color: var(--push); }
-    .streak-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; }
+
+    .streak-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 700;
+    }
     .streak-w { background: rgba(0,230,118,0.15); color: var(--win); }
-    .streak-l { background: rgba(255,68,68,0.15); color: var(--loss); }
-    .win-pct-bar-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
-    .win-pct-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .streak-l { background: rgba(255,68,68,0.15);  color: var(--loss); }
+
+    /* Win % bar */
+    .win-pct-bar-wrap {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px; margin-bottom: 10px;
+    }
+    .win-pct-header {
+      display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;
+    }
     .win-pct-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-    .win-pct-val { font-size: 22px; font-weight: 900; }
+    .win-pct-val   { font-size: 22px; font-weight: 900; }
     .win-pct-val.green { color: var(--win); }
-    .win-pct-val.red { color: var(--loss); }
+    .win-pct-val.red   { color: var(--loss); }
     .pct-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
     .pct-fill { height: 100%; border-radius: 4px; width: 0; transition: width 1.3s cubic-bezier(0.4,0,0.2,1); }
     .pct-fill.green { background: linear-gradient(90deg, var(--accent2), var(--accent)); }
-    .pct-fill.red { background: linear-gradient(90deg, #991b1b, var(--loss)); }
+    .pct-fill.red   { background: linear-gradient(90deg, #991b1b, var(--loss)); }
     .pct-markers { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); }
+
+    /* Stats grid */
     .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-    .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 12px; text-align: center; }
+    .stat-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px 12px; text-align: center;
+    }
     .stat-val { font-size: 22px; font-weight: 900; letter-spacing: -0.5px; }
     .stat-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
     .stat-val.green { color: var(--win); }
-    .stat-val.red { color: var(--loss); }
-    .week-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
+    .stat-val.red   { color: var(--loss); }
+
+    /* This week box */
+    .week-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px; margin-bottom: 10px;
+    }
     .week-box h3 { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
     .week-record { display: flex; gap: 8px; }
     .week-item { flex: 1; text-align: center; background: var(--surface2); border-radius: 10px; padding: 10px 6px; }
@@ -194,91 +548,151 @@
     .week-item.w .week-num { color: var(--win); }
     .week-item.l .week-num { color: var(--loss); }
     .week-item.p .week-num { color: var(--push); }
-    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+
+    /* Chart */
+    .chart-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 16px;
+    }
     .chart-card h3 { font-size: 11px; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
     .chart-wrap { position: relative; height: 180px; }
 
-    /* ── History ─────────────────────────────────────────────────────── */
-    .hist-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 14px; border: 1px solid var(--border); }
+    /* ── History tab ─────────────────────────────────────────────────── */
+    .hist-table-wrap {
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      border-radius: 14px; border: 1px solid var(--border);
+    }
     table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
-    thead th { background: var(--surface2); color: var(--muted); font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px; text-align: left; border-bottom: 1px solid var(--border); }
+    thead th {
+      background: var(--surface2); color: var(--muted);
+      font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+      padding: 10px; text-align: left; border-bottom: 1px solid var(--border);
+    }
     tbody tr { border-bottom: 1px solid var(--border); }
     tbody tr:last-child { border-bottom: none; }
-    tbody td { padding: 10px; color: var(--text); background: var(--surface); }
-    .result-w { color: var(--win); font-weight: 800; }
+    tbody td { padding: 10px; color: var(--text); background: var(--surface); transition: background 0.1s; }
+    tbody tr:hover td { background: var(--surface2); }
+    .result-w { color: var(--win);  font-weight: 800; }
     .result-l { color: var(--loss); font-weight: 800; }
     .result-p { color: var(--push); font-weight: 700; }
 
-    /* ── Misc ─────────────────────────────────────────────────────────── */
+    /* ── Empty / Spinner ─────────────────────────────────────────────── */
     .empty { text-align: center; padding: 50px 20px; color: var(--muted); }
     .empty .big { font-size: 48px; margin-bottom: 10px; }
-    .empty p { font-size: 14px; }
+    .empty p    { font-size: 14px; }
+
     .spinner { display: flex; justify-content: center; padding: 40px; }
-    .spinner::after { content: ''; width: 30px; height: 30px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    .spinner::after {
+      content: ''; width: 30px; height: 30px;
+      border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
+
     .refresh-note { text-align: center; font-size: 11px; color: var(--muted); padding: 6px 0 10px; }
 
     /* ── iOS Safari viewport fix ─────────────────────────────────────── */
-    html { height: -webkit-fill-available; }
-    body { min-height: 100vh; min-height: -webkit-fill-available; }
-    #app { min-height: 100vh; min-height: -webkit-fill-available; }
+    html {
+      height: -webkit-fill-available;
+    }
+    body {
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+    }
+    #app {
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+    }
 
-    /* ── Mobile (≤ 480px) — two-row header so buttons are easy to tap ── */
+    /* ── Mobile base (all phones ≤ 480px) ───────────────────────────── */
     @media (max-width: 480px) {
+      /* Clean header — buttons moved to bottom nav */
       header {
-        flex-wrap: wrap;
-        padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
-        gap: 6px;
+        padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 8px;
+        gap: 8px;
       }
       .header-logo { width: 28px; height: 28px; font-size: 15px; border-radius: 8px; }
       header h1 { font-size: 15px; }
-      /* Actions drop to their own full-width row — much lower on screen */
-      .header-actions { width: 100%; justify-content: flex-end; padding-top: 2px; }
-      /* Bigger touch targets (Apple recommends 44×44 minimum) */
-      .icon-btn { width: 44px; height: 44px; font-size: 18px; border-radius: 12px; }
-      .subtitle { flex: 1; font-size: 11px; }
+      /* Hide header buttons on mobile — they live in bottom nav now */
+      .header-actions { display: none; }
+      /* Show action buttons in bottom nav on mobile */
+      .nav-action-btn { display: flex; }
 
+      /* Content padding */
       .content { padding: 10px 10px calc(62px + env(safe-area-inset-bottom, 0px) + 10px); }
+
+      /* Pick card tighter */
       .pick-card-body { padding: 12px 11px; }
       .pick-card { border-radius: 14px; }
+
+      /* Team logos smaller so names have room */
       .team-logo { width: 32px; height: 32px; }
       .team-block { gap: 6px; }
       .team-name { font-size: 12px; }
       .team-city { font-size: 9px; }
       .vs-badge { width: 22px; height: 22px; font-size: 9px; margin: 0 4px; }
+
+      /* Pick winner row */
       .pick-winner-line { font-size: 14px; }
       .odds-chip { font-size: 10px; padding: 1px 6px; }
+
+      /* Confidence meter — scale down slightly */
       .conf-meter { width: 44px !important; height: 44px !important; }
+
+      /* ERA section */
       .era-section { font-size: 10px; padding: 7px 9px; }
       .era-val { font-size: 11px; }
+
+      /* Edge bar */
+      .edge-bar-label { font-size: 10px; }
+
+      /* Record hero numbers */
       .wlp-num { font-size: 38px; letter-spacing: -1px; }
+
+      /* Stats grid */
       .stat-val { font-size: 20px; }
       .stat-box { padding: 12px 10px; }
+
+      /* Score chips */
       .score-chip { min-width: 118px; padding: 7px 8px; }
       .score-team { font-size: 10px; gap: 2px; }
+
+      /* Chart smaller */
       .chart-wrap { height: 160px; }
+
+      /* Streak badge */
       .streak-badge { font-size: 12px; padding: 4px 12px; }
+
+      /* Week box */
       .week-num { font-size: 18px; }
     }
 
-    /* ── iPhone SE (375px) ───────────────────────────────────────────── */
+    /* ── Small phones (iPhone SE, 375px) ────────────────────────────── */
     @media (max-width: 380px) {
       .subtitle { font-size: 10px; }
       header h1 { font-size: 14px; }
-      .pick-card-body { padding: 10px; }
+      .pick-card-body { padding: 10px 10px; }
+
+      /* Logo smaller still */
       .team-logo { width: 27px; height: 27px; }
       .team-name { font-size: 11px; }
+
+      /* WLP numbers */
       .wlp-num { font-size: 34px; }
       .wlp-lbl { font-size: 9px; letter-spacing: 1px; }
+
+      /* Confidence meter smaller */
       .conf-meter { width: 40px !important; height: 40px !important; }
+
+      /* Stat boxes */
       .stat-val { font-size: 18px; }
       .stats-grid { gap: 6px; }
     }
 
     /* ── Landscape iPhone ─────────────────────────────────────────────── */
     @media (max-height: 500px) and (orientation: landscape) {
-      header { padding: calc(4px + env(safe-area-inset-top, 0px)) 14px 4px; }
-      .header-actions { padding-top: 0; }
+      header { padding: calc(6px + env(safe-area-inset-top, 0px)) 14px 5px; }
+      .content { padding-top: 6px; }
       .chart-wrap { height: 130px; }
       .record-hero { padding: 14px 16px 12px; }
       .wlp-num { font-size: 32px; }
@@ -306,13 +720,24 @@
   </main>
 
   <nav>
-    <button class="tab-btn active" data-tab="today"><span class="icon">📅</span>Today</button>
-    <button class="tab-btn" data-tab="record"><span class="icon">📊</span>Record</button>
-    <button class="tab-btn" data-tab="history"><span class="icon">📜</span>History</button>
+    <button class="tab-btn active" data-tab="today">
+      <span class="icon">📅</span>Today
+    </button>
+    <button class="tab-btn" data-tab="record">
+      <span class="icon">📊</span>Record
+    </button>
+    <button class="tab-btn" data-tab="history">
+      <span class="icon">📜</span>History
+    </button>
+    <button class="nav-action-btn" id="notif-btn-nav" onclick="handleNotifBtn()" title="Notifications">🔕</button>
+    <button class="nav-action-btn" id="theme-btn-nav" onclick="toggleTheme()" title="Toggle theme">🌙</button>
   </nav>
 </div>
 
 <script>
+/* ══════════════════════════════════════════════════════════════════════
+   TEAM LOGOS
+══════════════════════════════════════════════════════════════════════ */
 const TEAM_IDS = {
   "Arizona Diamondbacks":109,"Atlanta Braves":144,"Baltimore Orioles":110,
   "Boston Red Sox":111,"Chicago Cubs":112,"Chicago White Sox":145,
@@ -323,7 +748,8 @@ const TEAM_IDS = {
   "New York Yankees":147,"Oakland Athletics":133,"Philadelphia Phillies":143,
   "Pittsburgh Pirates":134,"San Diego Padres":135,"San Francisco Giants":137,
   "Seattle Mariners":136,"St. Louis Cardinals":138,"Tampa Bay Rays":139,
-  "Texas Rangers":140,"Toronto Blue Jays":141,"Washington Nationals":120,"Athletics":133,
+  "Texas Rangers":140,"Toronto Blue Jays":141,"Washington Nationals":120,
+  "Athletics":133,
 };
 function logoUrl(name) { const id = TEAM_IDS[name]; return id ? `https://www.mlbstatic.com/team-logos/${id}.svg` : null; }
 function logoImg(name, size=38) {
@@ -332,339 +758,748 @@ function logoImg(name, size=38) {
   return `<img src="${url}" style="width:${size}px;height:${size}px;object-fit:contain;flex-shrink:0" onerror="this.style.opacity=0" alt="">`;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   THEME
+══════════════════════════════════════════════════════════════════════ */
 let chartInst = null;
+
 function getTheme() { return localStorage.getItem('theme') || 'dark'; }
 function applyTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
-  document.getElementById('theme-btn').textContent = t === 'dark' ? '🌙' : '☀️';
+  const icon = t === 'dark' ? '🌙' : '☀️';
+  ['theme-btn', 'theme-btn-nav'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = icon; });
   localStorage.setItem('theme', t);
   if (chartInst) {
-    chartInst.options.scales.x.ticks.color = t==='dark'?'#555':'#9ca3af';
-    chartInst.options.scales.y.ticks.color = t==='dark'?'#555':'#9ca3af';
-    chartInst.options.scales.x.grid.color  = t==='dark'?'#1a1a1a':'#e5e7eb';
-    chartInst.options.scales.y.grid.color  = t==='dark'?'#1a1a1a':'#e5e7eb';
+    chartInst.options.scales.x.ticks.color = t === 'dark' ? '#555' : '#9ca3af';
+    chartInst.options.scales.y.ticks.color = t === 'dark' ? '#555' : '#9ca3af';
+    chartInst.options.scales.x.grid.color  = t === 'dark' ? '#1a1a1a' : '#e5e7eb';
+    chartInst.options.scales.y.grid.color  = t === 'dark' ? '#1a1a1a' : '#e5e7eb';
     chartInst.update();
   }
 }
-function toggleTheme() { applyTheme(getTheme()==='dark'?'light':'dark'); }
+function toggleTheme() { applyTheme(getTheme() === 'dark' ? 'light' : 'dark'); }
 applyTheme(getTheme());
 
-function showToast(msg, duration=3000) {
+/* ══════════════════════════════════════════════════════════════════════
+   PUSH NOTIFICATIONS
+══════════════════════════════════════════════════════════════════════ */
+function showToast(msg, duration = 3000) {
   const t = document.getElementById('notif-toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), duration);
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
 }
-function updateNotifBtn() {
-  const btn = document.getElementById('notif-btn');
-  if (!('Notification' in window)) { btn.style.opacity='0.4'; return; }
-  btn.textContent = Notification.permission==='granted' ? '🔔' : '🔕';
-}
-async function handleNotifBtn() {
-  if (!('Notification' in window)) { showToast('Notifications not supported'); return; }
-  if (Notification.permission==='granted') { showToast('🔔 Notifications are already on!'); }
-  else if (Notification.permission==='denied') { showToast('Notifications blocked — enable in Settings'); }
-  else {
-    const perm = await Notification.requestPermission();
-    updateNotifBtn();
-    if (perm==='granted') showToast("🔔 Notifications enabled!");
-    else showToast('Notifications declined');
-  }
-}
-function maybeNotify(picks) {
-  if (!picks.length || !('Notification' in window) || Notification.permission!=='granted') return;
-  const today = new Date().toISOString().split('T')[0], key='notifSentDate';
-  if (localStorage.getItem(key)===today) return;
-  localStorage.setItem(key, today);
-  const names = picks.map(p=>p.pick.split(' ').pop()).join(', ');
-  try { new Notification(`⚾ ${picks.length} Pick${picks.length>1?'s':''} Today!`,{body:names,icon:'/static/icon-192.png'}); } catch(e) {}
-}
-updateNotifBtn();
 
-function confidenceScore(margin) { return Math.min(Math.round(50+margin*13),90); }
-function confidenceMeter(margin) {
-  const pct=confidenceScore(margin), color=pct>=72?'#00e676':pct>=62?'#f59e0b':'#f87171';
-  const r=19, circ=+(2*Math.PI*r).toFixed(2), dash=+(circ-(pct/100)*circ).toFixed(2);
-  return `<div class="conf-meter" style="position:relative;width:50px;height:50px;flex-shrink:0">
-    <svg width="50" height="50" viewBox="0 0 50 50" style="width:100%;height:100%">
-      <circle cx="25" cy="25" r="${r}" fill="none" stroke="var(--border)" stroke-width="4"/>
-      <circle cx="25" cy="25" r="${r}" fill="none" stroke="${color}" stroke-width="4"
-        stroke-dasharray="${circ}" stroke-dashoffset="${circ}" data-target="${dash}"
-        stroke-linecap="round" transform="rotate(-90 25 25)"
-        style="transition:stroke-dashoffset 1.3s cubic-bezier(0.4,0,0.2,1)"/>
-    </svg>
-    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;pointer-events:none">
-      <span style="font-weight:900;color:${color};font-size:11px">${pct}</span>
-      <span style="color:var(--muted);font-weight:700;font-size:7px">CONF</span>
-    </div>
-  </div>`;
-}
-function animateConfMeters() {
-  document.querySelectorAll('.conf-meter svg circle[data-target]').forEach(el=>{
-    setTimeout(()=>{ el.style.strokeDashoffset=el.dataset.target; },150);
+function updateNotifBtn() {
+  const icon = !('Notification' in window) ? '🔕' : Notification.permission === 'granted' ? '🔔' : '🔕';
+  const opacity = !('Notification' in window) ? '0.4' : '1';
+  ['notif-btn', 'notif-btn-nav'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) { btn.textContent = icon; btn.style.opacity = opacity; }
   });
 }
 
-function generateReasoning(p) {
-  const reasons=[], isAway=p.pick===p.away_team, last=p.pick.split(' ').pop();
-  if (p.away_era!=null && p.home_era!=null) {
-    const pE=isAway?p.away_era:p.home_era, oE=isAway?p.home_era:p.away_era;
-    const pP=(isAway?p.away_pitcher:p.home_pitcher||'').split(' ').pop();
-    const oP=(isAway?p.home_pitcher:p.away_pitcher||'').split(' ').pop();
-    if (pE<oE) reasons.push(`${pP} has better ERA (${pE.toFixed(2)}) vs ${oP} (${oE.toFixed(2)})`);
-    else reasons.push(`Model edge overcomes ERA gap — stronger team stats overall`);
+async function handleNotifBtn() {
+  if (!('Notification' in window)) { showToast('Notifications not supported on this browser'); return; }
+  if (Notification.permission === 'granted') {
+    showToast('🔔 Notifications are already on!');
+  } else if (Notification.permission === 'denied') {
+    showToast('Notifications blocked — enable in browser settings');
+  } else {
+    const perm = await Notification.requestPermission();
+    updateNotifBtn();
+    if (perm === 'granted') showToast('🔔 Notifications enabled! You\'ll be alerted when picks drop.');
+    else showToast('Notifications declined');
   }
-  const pR=isAway?p.away_recent_era:p.home_recent_era, pS=isAway?p.away_era:p.home_era;
-  if (pR!=null && pS!=null) {
-    if (pR<pS) reasons.push(`Pitcher trending well — L3 ERA (${pR.toFixed(2)}) better than season avg`);
-    else if (pR>pS+1.5) reasons.push(`Note: pitcher trending cold (L3 ERA ${pR.toFixed(2)})`);
-  }
-  if (!isAway) reasons.push(`${last} have home field advantage`);
-  if (p.margin>=2.0) reasons.push(`Very strong edge of ${p.margin.toFixed(2)} — high conviction`);
-  else if (p.margin>=1.5) reasons.push(`Solid model edge of ${p.margin.toFixed(2)}`);
-  else reasons.push(`Model edge of ${p.margin.toFixed(2)} above the 1.00 threshold`);
-  return reasons;
-}
-function toggleReasoning(id) {
-  const btn=document.getElementById(`rb-${id}`), body=document.getElementById(`rd-${id}`);
-  if (!btn||!body) return;
-  const open=body.classList.contains('open');
-  body.classList.toggle('open',!open); btn.classList.toggle('open',!open);
-  btn.querySelector('.arrow').textContent=open?'▾':'▴';
 }
 
-let activeTab='today';
-const REFRESH=5*60*1000;
-document.querySelectorAll('.tab-btn').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    const tab=btn.dataset.tab; if (tab===activeTab) return;
-    activeTab=tab;
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+function maybeNotify(picks) {
+  if (!picks.length) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const today = new Date().toISOString().split('T')[0];
+  const key   = 'notifSentDate';
+  if (localStorage.getItem(key) === today) return;
+  localStorage.setItem(key, today);
+  const names = picks.map(p => p.pick.split(' ').pop()).join(', ');
+  try {
+    new Notification(`⚾ ${picks.length} Pick${picks.length > 1 ? 's' : ''} Today!`, {
+      body: names,
+      icon: '/static/icon-192.png',
+    });
+  } catch(e) {}
+}
+
+updateNotifBtn();
+
+/* ══════════════════════════════════════════════════════════════════════
+   CONFIDENCE METER
+══════════════════════════════════════════════════════════════════════ */
+function confidenceScore(margin) {
+  return Math.min(Math.round(50 + margin * 13), 90);
+}
+
+function confidenceMeter(margin) {
+  const pct   = confidenceScore(margin);
+  const color = pct >= 72 ? '#00e676' : pct >= 62 ? '#f59e0b' : '#f87171';
+  const r     = 19;
+  const circ  = +(2 * Math.PI * r).toFixed(2);
+  const dash  = +(circ - (pct / 100) * circ).toFixed(2);
+  return `
+    <div class="conf-meter" style="position:relative;width:50px;height:50px;flex-shrink:0">
+      <svg width="50" height="50" viewBox="0 0 50 50" style="width:100%;height:100%">
+        <circle cx="25" cy="25" r="${r}" fill="none" stroke="var(--border)" stroke-width="4"/>
+        <circle cx="25" cy="25" r="${r}" fill="none" stroke="${color}" stroke-width="4"
+          stroke-dasharray="${circ}" stroke-dashoffset="${circ}"
+          data-target="${dash}"
+          stroke-linecap="round" transform="rotate(-90 25 25)"
+          style="transition:stroke-dashoffset 1.3s cubic-bezier(0.4,0,0.2,1)"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;pointer-events:none">
+        <span class="conf-pct" style="font-weight:900;color:${color};font-size:11px">${pct}</span>
+        <span class="conf-lbl" style="color:var(--muted);font-weight:700;letter-spacing:0.3px;font-size:7px">CONF</span>
+      </div>
+    </div>`;
+}
+
+function animateConfMeters() {
+  document.querySelectorAll('.conf-meter svg circle[data-target]').forEach(el => {
+    const target = el.dataset.target;
+    setTimeout(() => { el.style.strokeDashoffset = target; }, 150);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PICK REASONING
+══════════════════════════════════════════════════════════════════════ */
+function generateReasoning(p) {
+  const isAway      = p.pick === p.away_team;
+  const pickedTeam  = p.pick;
+  const oppTeam     = isAway ? p.home_team : p.away_team;
+  const pickedLast  = pickedTeam.split(' ').pop();
+  const oppLast     = oppTeam.split(' ').pop();
+
+  const pickedPitcher = isAway ? p.away_pitcher : p.home_pitcher;
+  const oppPitcher    = isAway ? p.home_pitcher : p.away_pitcher;
+  const pickedPLast   = (pickedPitcher || 'TBD').split(' ').pop();
+  const oppPLast      = (oppPitcher    || 'TBD').split(' ').pop();
+  const pickedERA     = isAway ? p.away_era        : p.home_era;
+  const oppERA        = isAway ? p.home_era        : p.away_era;
+  const pickedL3      = isAway ? p.away_recent_era : p.home_recent_era;
+  const oppL3         = isAway ? p.home_recent_era : p.away_recent_era;
+
+  const edge    = p.margin || 0;
+  const winProb = Math.min(Math.round(50 + edge * 13), 90);
+
+  // Edge tier label
+  let edgeTierClass, edgeTierLabel;
+  if      (edge >= 2.5) { edgeTierClass = 'elite';     edgeTierLabel = '🔥 ELITE EDGE';       }
+  else if (edge >= 2.0) { edgeTierClass = 'elite';     edgeTierLabel = '💪 VERY STRONG';      }
+  else if (edge >= 1.5) { edgeTierClass = 'strong';    edgeTierLabel = '✅ STRONG EDGE';      }
+  else if (edge >= 1.25){ edgeTierClass = 'moderate';  edgeTierLabel = '📈 SOLID EDGE';       }
+  else                  { edgeTierClass = 'threshold';  edgeTierLabel = '⚡ QUALIFYING EDGE';  }
+
+  // Value vs market
+  let valueStr = '';
+  if (p.pick_odds) {
+    const o = p.pick_odds;
+    const impliedProb = o < 0 ? Math.round((-o / (-o + 100)) * 100) : Math.round((100 / (o + 100)) * 100);
+    const diff = winProb - impliedProb;
+    if (diff > 0) {
+      valueStr = `<div class="rd-line good">📊 <strong>Model finds +${diff}% value</strong> — win probability ${winProb}% vs market implied ${impliedProb}%</div>`;
+    } else {
+      valueStr = `<div class="rd-line neutral">📊 Model win probability: <strong>${winProb}%</strong> · Market implied: <strong>${impliedProb}%</strong></div>`;
+    }
+  } else {
+    valueStr = `<div class="rd-line neutral">📊 Model win probability: <strong>${winProb}%</strong></div>`;
+  }
+
+  // ── SECTION 1: Model Edge (THE DECISION) ──────────────────────────────
+  const s1 = `
+    <div class="rd-section">
+      <div class="rd-section-title">🎯 Model Edge — The Decision</div>
+      <div class="rd-edge-hero">
+        <div class="rd-edge-hero-label">Edge Score</div>
+        <div class="rd-edge-score">${edge.toFixed(2)}</div>
+        <div class="rd-edge-tier ${edgeTierClass}">${edgeTierLabel}</div>
+        <div class="rd-edge-desc">Qualifying threshold: 1.00 &nbsp;·&nbsp; This pick scored <strong>${edge.toFixed(2)}</strong></div>
+      </div>
+      <div class="rd-line good">🧠 <strong>${pickedLast} ML</strong> selected — model probability exceeds market line by a measurable, qualifying edge</div>
+      ${valueStr}
+      <div class="rd-line ${edge >= 1.5 ? 'good' : 'neutral'}">📐 Edge <strong>${edge.toFixed(2)}</strong> — ${edge >= 2.0 ? 'high-conviction play, strong position sizing appropriate' : edge >= 1.5 ? 'confident play, edge is well clear of threshold' : 'qualifying play — minimum edge requirement cleared, standard sizing'}</div>
+    </div>`;
+
+  // ── SECTION 2: Pitching Matchup (Supporting Evidence) ─────────────────
+  const pickedERAStr = pickedERA != null ? pickedERA.toFixed(2) : '—';
+  const oppERAStr    = oppERA    != null ? oppERA.toFixed(2)    : '—';
+  const pickedWinsERA = pickedERA != null && oppERA != null && pickedERA < oppERA;
+
+  function l3Badge(l3, season) {
+    if (l3 == null) return '';
+    const cls = l3 < (season || 99) ? 'hot' : l3 > (season || 0) + 1 ? 'cold' : 'flat';
+    return `<span class="rd-l3 ${cls}">L3: ${l3.toFixed(2)}</span>`;
+  }
+
+  let eraCompLine = '';
+  if (pickedERA != null && oppERA != null) {
+    const diff = Math.abs(pickedERA - oppERA).toFixed(2);
+    if (pickedERA < oppERA) {
+      eraCompLine = `<div class="rd-line good">✅ <strong>${pickedPLast}</strong> holds the ERA edge — ${diff} lower than opposing starter</div>`;
+    } else if (pickedERA > oppERA) {
+      eraCompLine = `<div class="rd-line warn">⚠️ <strong>${pickedPLast}</strong> ERA is ${diff} higher — pitching disadvantage noted, model edge overrides</div>`;
+    } else {
+      eraCompLine = `<div class="rd-line neutral">ERA even between starters — model finds edge in team-level factors</div>`;
+    }
+  } else {
+    eraCompLine = `<div class="rd-line neutral">Pitcher ERA data unavailable — model ran on available metrics</div>`;
+  }
+
+  let l3Line = '';
+  if (pickedL3 != null && pickedERA != null) {
+    if (pickedL3 < pickedERA) {
+      l3Line = `<div class="rd-line good">🔥 <strong>${pickedPLast}</strong> trending hot — last 3 starts ERA (${pickedL3.toFixed(2)}) below season average</div>`;
+    } else if (pickedL3 > pickedERA + 1.5) {
+      l3Line = `<div class="rd-line warn">❄️ <strong>${pickedPLast}</strong> recent form is cold — L3 ERA (${pickedL3.toFixed(2)}) above season average by ${(pickedL3 - pickedERA).toFixed(2)}</div>`;
+    }
+  }
+
+  const s2 = `
+    <div class="rd-section">
+      <div class="rd-section-title">⚾ Pitching Matchup — Supporting Evidence</div>
+      <div class="rd-pitcher-row">
+        <div class="rd-pitcher ${pickedWinsERA ? 'rd-win' : ''}">
+          <div class="rd-pitcher-team" style="color:var(--accent)">${pickedLast} ✅</div>
+          <div class="rd-pitcher-name">${pickedPLast}</div>
+          <div class="rd-era-big">${pickedERAStr}</div>
+          <div class="rd-era-lbl">Season ERA</div>
+          ${l3Badge(pickedL3, pickedERA)}
+        </div>
+        <div class="rd-vs">VS</div>
+        <div class="rd-pitcher ${!pickedWinsERA && pickedERA != null && oppERA != null ? 'rd-win' : ''}">
+          <div class="rd-pitcher-team" style="color:var(--muted)">${oppLast}</div>
+          <div class="rd-pitcher-name">${oppPLast}</div>
+          <div class="rd-era-big">${oppERAStr}</div>
+          <div class="rd-era-lbl">Season ERA</div>
+          ${l3Badge(oppL3, oppERA)}
+        </div>
+      </div>
+      ${eraCompLine}
+      ${l3Line}
+    </div>`;
+
+  // ── SECTION 3: Game Context (Supporting Evidence) ──────────────────────
+  const isPickHome = !isAway;
+  const s3 = `
+    <div class="rd-section">
+      <div class="rd-section-title">🏟️ Game Context — Supporting Evidence</div>
+      <div class="rd-line ${isPickHome ? 'good' : 'neutral'}">
+        ${isPickHome
+          ? `🏠 <strong>${pickedLast}</strong> playing at home — model factors in home field advantage`
+          : `✈️ <strong>${pickedLast}</strong> on the road — model accounts for travel and park factors`}
+      </div>
+      <div class="rd-line neutral">📍 Full head-to-head: <strong>${p.away_team.split(' ').pop()}</strong> @ <strong>${p.home_team.split(' ').pop()}</strong> — all factors weighted and scored</div>
+    </div>`;
+
+  // ── SECTION 4: Verdict ──────────────────────────────────────────────────
+  let verdictText;
+  if (edge >= 2.0) {
+    verdictText = `The model carries <strong>very high conviction</strong> on <strong>${pickedLast} ML</strong>. An edge of ${edge.toFixed(2)} sits well above the qualifying threshold — this is among the strongest plays of the day. ERA matchup and game context reinforce the model's output.`;
+  } else if (edge >= 1.5) {
+    verdictText = `<strong>${pickedLast} ML</strong> is a confident play. The edge of ${edge.toFixed(2)} clears the threshold comfortably, with the model's win probability consistently outpacing what the market is pricing in. Supporting factors are aligned.`;
+  } else {
+    verdictText = `<strong>${pickedLast} ML</strong> qualifies on model edge at ${edge.toFixed(2)}. This is a threshold play — the model detects value the market hasn't fully priced. Standard position sizing recommended to reflect the narrower but real edge.`;
+  }
+
+  return `${s1}${s2}${s3}
+    <div class="rd-verdict">
+      <div class="rd-verdict-title">📋 Verdict</div>
+      <div class="rd-verdict-text">${verdictText}</div>
+    </div>`;
+}
+
+let openReasoningId = null;
+function toggleReasoning(id) {
+  const btn  = document.getElementById(`rb-${id}`);
+  const body = document.getElementById(`rd-${id}`);
+  if (!btn || !body) return;
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  btn.classList.toggle('open', !isOpen);
+  btn.querySelector('.arrow').textContent = isOpen ? '▾' : '▴';
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   STATE & TABS
+══════════════════════════════════════════════════════════════════════ */
+let activeTab = 'today';
+const REFRESH = 5 * 60 * 1000;
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    if (tab === activeTab) return;
+    activeTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-    document.getElementById('panel-'+tab).classList.add('active');
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-' + tab).classList.add('active');
     loadTab(tab);
   });
 });
 
-async function fetchJSON(url) { const r=await fetch(url); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }
-function spinner() { return '<div class="spinner"></div>'; }
-function setPanel(id,h) { document.getElementById(id).innerHTML=h; }
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+function spinner()        { return '<div class="spinner"></div>'; }
+function setPanel(id, h)  { document.getElementById(id).innerHTML = h; }
 
-function animateVal(el,target,decimals=0,prefix='',suffix='') {
+/* ══════════════════════════════════════════════════════════════════════
+   ANIMATED COUNTERS
+══════════════════════════════════════════════════════════════════════ */
+function animateVal(el, target, decimals=0, prefix='', suffix='') {
   if (!el) return;
-  const dur=900, t0=performance.now();
+  const dur = 900, t0 = performance.now();
   function step(now) {
-    const p=Math.min((now-t0)/dur,1), e=1-Math.pow(1-p,3);
-    el.textContent=prefix+(target*e).toFixed(decimals)+suffix;
-    if (p<1) requestAnimationFrame(step);
+    const p = Math.min((now - t0) / dur, 1);
+    const e = 1 - Math.pow(1 - p, 3);
+    el.textContent = prefix + (target * e).toFixed(decimals) + suffix;
+    if (p < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
-function animateEdgeBars() { document.querySelectorAll('.edge-fill[data-pct]').forEach(el=>{ setTimeout(()=>{el.style.width=el.dataset.pct+'%';},100); }); }
-function animatePctBars()  { document.querySelectorAll('.pct-fill[data-pct]').forEach(el=>{ setTimeout(()=>{el.style.width=el.dataset.pct+'%';},200); }); }
 
+function animateEdgeBars() {
+  document.querySelectorAll('.edge-fill[data-pct]').forEach(el => {
+    setTimeout(() => { el.style.width = el.dataset.pct + '%'; }, 100);
+  });
+}
+
+function animatePctBars() {
+  document.querySelectorAll('.pct-fill[data-pct]').forEach(el => {
+    setTimeout(() => { el.style.width = el.dataset.pct + '%'; }, 200);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   LIVE SCORE TICKER
+══════════════════════════════════════════════════════════════════════ */
 async function loadLiveScores(myPicks) {
   try {
-    const today=new Date().toISOString().split('T')[0];
-    const data=await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=linescore&gameType=R`).then(r=>r.json());
-    const games=(data.dates||[]).flatMap(d=>d.games||[]);
+    const today = new Date().toISOString().split('T')[0];
+    const url   = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=linescore&gameType=R`;
+    const data  = await fetch(url).then(r => r.json());
+    const games = (data.dates || []).flatMap(d => d.games || []);
     if (!games.length) return '';
-    const pickedTeams=new Set((myPicks||[]).map(p=>p.pick));
-    const chips=games.map(g=>{
-      const away=g.teams?.away?.team?.name||'', home=g.teams?.home?.team?.name||'';
-      const awayR=g.linescore?.teams?.away?.runs??'—', homeR=g.linescore?.teams?.home?.runs??'—';
-      const state=g.status?.abstractGameState||'';
-      const inning=g.linescore?.currentInning, half=g.linescore?.inningHalf;
-      let statusStr='', statusCls='';
-      if (state==='Final') { statusStr='Final'; }
-      else if (state==='Live') { statusStr=(half&&inning)?`${half==='Top'?'▲':'▼'}${inning}`:'Live'; statusCls='live'; }
-      else { try { statusStr=new Date(g.gameDate).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); } catch(e){statusStr='Soon';} }
-      const isPick=pickedTeams.has(away)||pickedTeams.has(home);
-      const showScore=state==='Final'||state==='Live';
-      return `<div class="score-chip${isPick?' is-pick':''}">
-        <div class="score-chip-teams">
-          <div class="score-team">${logoImg(away,14)} ${away.split(' ').pop()}</div>
-          ${showScore?`<span class="score-runs">${awayR}<span class="score-sep">-</span>${homeR}</span>`:`<span class="score-sep" style="font-size:10px">vs</span>`}
-          <div class="score-team">${home.split(' ').pop()} ${logoImg(home,14)}</div>
-        </div>
-        <div class="score-status ${statusCls}">${statusStr}${isPick?' ⚾':''}</div>
-      </div>`;
+
+    const pickedTeams = new Set((myPicks || []).map(p => p.pick));
+
+    const chips = games.map(g => {
+      const away   = g.teams?.away?.team?.name || '';
+      const home   = g.teams?.home?.team?.name || '';
+      const awayR  = g.linescore?.teams?.away?.runs ?? '—';
+      const homeR  = g.linescore?.teams?.home?.runs ?? '—';
+      const state  = g.status?.abstractGameState || '';
+      const inning = g.linescore?.currentInning;
+      const half   = g.linescore?.inningHalf;
+
+      let statusStr = '', statusCls = '';
+      if (state === 'Final') {
+        statusStr = 'Final'; statusCls = '';
+      } else if (state === 'Live') {
+        statusStr = (half && inning) ? `${half === 'Top' ? '▲' : '▼'}${inning}` : 'Live';
+        statusCls = 'live';
+      } else {
+        try {
+          const dt = new Date(g.gameDate);
+          statusStr = dt.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+        } catch(e) { statusStr = 'Soon'; }
+      }
+
+      const isPick = pickedTeams.has(away) || pickedTeams.has(home);
+      const showScore = state === 'Final' || state === 'Live';
+      const awayAbb = away.split(' ').pop();
+      const homeAbb = home.split(' ').pop();
+
+      return `
+        <div class="score-chip${isPick ? ' is-pick' : ''}">
+          <div class="score-chip-teams">
+            <div class="score-team">${logoImg(away,14)} ${awayAbb}</div>
+            ${showScore
+              ? `<span class="score-runs">${awayR}<span class="score-sep">-</span>${homeR}</span>`
+              : `<span class="score-sep" style="font-size:10px">vs</span>`}
+            <div class="score-team">${homeAbb} ${logoImg(home,14)}</div>
+          </div>
+          <div class="score-status ${statusCls}">${statusStr}${isPick ? ' ⚾' : ''}</div>
+        </div>`;
     }).join('');
-    return `<div class="ticker-wrap"><div class="ticker-label"><span class="live-dot"></span>Today's Scores</div><div class="ticker-scroll">${chips}</div></div>`;
+
+    return `
+      <div class="ticker-wrap">
+        <div class="ticker-label"><span class="live-dot"></span>Today's Scores</div>
+        <div class="ticker-scroll">${chips}</div>
+      </div>`;
   } catch(e) { return ''; }
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   TODAY TAB
+══════════════════════════════════════════════════════════════════════ */
 async function loadToday() {
-  setPanel('panel-today',spinner());
+  setPanel('panel-today', spinner());
   try {
-    const picks=await fetchJSON('/api/today');
-    const ticker=await loadLiveScores(picks);
-    setPanel('panel-today',renderToday(picks,ticker));
-    animateEdgeBars(); animateConfMeters(); maybeNotify(picks);
-  } catch(e) { setPanel('panel-today',`<div class="empty"><p>Failed to load: ${e.message}</p></div>`); }
+    const picks  = await fetchJSON('/api/today');
+    const ticker = await loadLiveScores(picks);
+    setPanel('panel-today', renderToday(picks, ticker));
+    animateEdgeBars();
+    animateConfMeters();
+    maybeNotify(picks);
+  } catch(e) {
+    setPanel('panel-today', `<div class="empty"><p>Failed to load: ${e.message}</p></div>`);
+  }
 }
 
 function renderToday(picks, ticker='') {
-  const today=new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
-  if (!picks.length) return `${ticker}<div style="text-align:center;padding:10px 4px 6px;font-size:13px;color:var(--muted)">${today}</div><div class="empty"><div class="big">⚾</div><p>No qualifying picks today</p></div>`;
-  const cards=picks.map((p,i)=>{
-    const oddsStr=p.pick_odds?`<span class="odds-chip">${toDecimalOdds(p.pick_odds)}</span>`:'';
-    const marginStr=p.margin!=null?p.margin.toFixed(2):'—';
-    const edgePct=Math.min((p.margin||0)/3.0*100,100).toFixed(1);
-    const reasons=generateReasoning(p);
-    const awayCity=p.away_team.split(' ').slice(0,-1).join(' '), awayName=p.away_team.split(' ').pop();
-    const homeCity=p.home_team.split(' ').slice(0,-1).join(' '), homeName=p.home_team.split(' ').pop();
-    const awayLast=(p.away_pitcher||'').split(' ').pop()||'—';
-    const homeLast=(p.home_pitcher||'').split(' ').pop()||'—';
-    const awayERA=p.away_era!=null?p.away_era.toFixed(2):'—';
-    const homeERA=p.home_era!=null?p.home_era.toFixed(2):'—';
-    const awayL3=p.away_recent_era!=null?`<span class="era-l3"> · L3: ${p.away_recent_era.toFixed(2)}</span>`:'';
-    const homeL3=p.home_recent_era!=null?`<span class="era-l3"> · L3: ${p.home_recent_era.toFixed(2)}</span>`:'';
-    return `<div class="pick-card">
-      <div class="pick-card-accent"></div>
-      <div class="pick-card-body">
-        <div class="matchup-logos">
-          <div class="team-block away">${logoImg(p.away_team)}<div class="team-info"><div class="team-city">${awayCity}</div><div class="team-name">${awayName}</div></div></div>
-          <div class="vs-badge">@</div>
-          <div class="team-block home"><div class="team-info" style="text-align:right"><div class="team-city">${homeCity}</div><div class="team-name">${homeName}</div></div>${logoImg(p.home_team)}</div>
+  const today = new Date().toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
+
+  if (!picks.length) {
+    return `${ticker}
+      <div style="text-align:center;padding:10px 4px 6px;font-size:13px;color:var(--muted)">${today}</div>
+      <div class="empty"><div class="big">⚾</div><p>No qualifying picks today</p></div>`;
+  }
+
+  const cards = picks.map((p, i) => {
+    const oddsStr   = p.pick_odds ? `<span class="odds-chip">${toDecimalOdds(p.pick_odds)}</span>` : '';
+    const marginStr = p.margin != null ? p.margin.toFixed(2) : '—';
+    const edgePct   = Math.min((p.margin || 0) / 3.0 * 100, 100).toFixed(1);
+    const reasoningHTML = generateReasoning(p);
+
+    const awayCity = p.away_team.split(' ').slice(0,-1).join(' ');
+    const awayName = p.away_team.split(' ').pop();
+    const homeCity = p.home_team.split(' ').slice(0,-1).join(' ');
+    const homeName = p.home_team.split(' ').pop();
+
+    const awayLast = (p.away_pitcher || '').split(' ').pop() || '—';
+    const homeLast = (p.home_pitcher || '').split(' ').pop() || '—';
+    const awayERA  = p.away_era != null ? p.away_era.toFixed(2) : '—';
+    const homeERA  = p.home_era != null ? p.home_era.toFixed(2) : '—';
+    const awayL3   = p.away_recent_era != null ? `<span class="era-l3"> · L3: ${p.away_recent_era.toFixed(2)}</span>` : '';
+    const homeL3   = p.home_recent_era != null ? `<span class="era-l3"> · L3: ${p.home_recent_era.toFixed(2)}</span>` : '';
+
+    return `
+      <div class="pick-card">
+        <div class="pick-card-accent"></div>
+        <div class="pick-card-body">
+          <div class="matchup-logos">
+            <div class="team-block away">
+              ${logoImg(p.away_team)}
+              <div class="team-info">
+                <div class="team-city">${awayCity}</div>
+                <div class="team-name">${awayName}</div>
+              </div>
+            </div>
+            <div class="vs-badge">@</div>
+            <div class="team-block home">
+              <div class="team-info" style="text-align:right">
+                <div class="team-city">${homeCity}</div>
+                <div class="team-name">${homeName}</div>
+              </div>
+              ${logoImg(p.home_team)}
+            </div>
+          </div>
+
+          <div class="pick-winner-row">
+            <div class="pick-winner-line">✅ ${p.pick.split(' ').pop()} ML ${oddsStr}</div>
+            ${confidenceMeter(p.margin || 0)}
+          </div>
+
+          <div class="edge-bar-wrap">
+            <div class="edge-bar-label">
+              <span>Model Edge</span>
+              <span style="color:var(--text);font-weight:700">${marginStr}</span>
+            </div>
+            <div class="edge-bar">
+              <div class="edge-fill" data-pct="${edgePct}"></div>
+            </div>
+          </div>
+
+          <div class="era-section">
+            <div class="era-row">
+              <span class="era-name">📉 ${awayLast}</span>
+              <span><span class="era-val">${awayERA}</span> ERA${awayL3}</span>
+            </div>
+            <div class="era-row">
+              <span class="era-name">📈 ${homeLast}</span>
+              <span><span class="era-val">${homeERA}</span> ERA${homeL3}</span>
+            </div>
+          </div>
+
+          <button class="reasoning-toggle" id="rb-${i}" onclick="toggleReasoning(${i})">
+            <span>🧠 Why this pick?</span>
+            <span class="arrow">▾</span>
+          </button>
+          <div class="reasoning-body" id="rd-${i}">
+            ${reasoningHTML}
+          </div>
         </div>
-        <div class="pick-winner-row">
-          <div class="pick-winner-line">✅ ${p.pick.split(' ').pop()} ML ${oddsStr}</div>
-          ${confidenceMeter(p.margin||0)}
-        </div>
-        <div class="edge-bar-wrap">
-          <div class="edge-bar-label"><span>Model Edge</span><span style="color:var(--text);font-weight:700">${marginStr}</span></div>
-          <div class="edge-bar"><div class="edge-fill" data-pct="${edgePct}"></div></div>
-        </div>
-        <div class="era-section">
-          <div class="era-row"><span class="era-name">📉 ${awayLast}</span><span><span class="era-val">${awayERA}</span> ERA${awayL3}</span></div>
-          <div class="era-row"><span class="era-name">📈 ${homeLast}</span><span><span class="era-val">${homeERA}</span> ERA${homeL3}</span></div>
-        </div>
-        <button class="reasoning-toggle" id="rb-${i}" onclick="toggleReasoning(${i})"><span>🧠 Why this pick?</span><span class="arrow">▾</span></button>
-        <div class="reasoning-body" id="rd-${i}"><ul>${reasons.map(r=>`<li>${r}</li>`).join('')}</ul></div>
-      </div>
-    </div>`;
+      </div>`;
   }).join('');
-  return `${ticker}<div style="text-align:center;padding:6px 4px 2px;font-size:13px;color:var(--muted)">${today}</div><div class="refresh-note">Auto-refreshes every 5 min</div>${cards}`;
+
+  return `
+    ${ticker}
+    <div style="text-align:center;padding:6px 4px 2px;font-size:13px;color:var(--muted)">${today}</div>
+    <div class="refresh-note">Auto-refreshes every 5 min</div>
+    ${cards}`;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   RECORD TAB
+══════════════════════════════════════════════════════════════════════ */
 async function loadRecord() {
-  setPanel('panel-record',spinner());
+  setPanel('panel-record', spinner());
   try {
-    const [rec,chartPts,allPicks]=await Promise.all([fetchJSON('/api/record'),fetchJSON('/api/chart'),fetchJSON('/api/picks')]);
-    setPanel('panel-record',renderRecord(rec,allPicks));
-    renderChart(chartPts); animatePctBars();
-    animateVal(document.getElementById('anim-wins'),rec.wins,0);
-    animateVal(document.getElementById('anim-losses'),rec.losses,0);
-    animateVal(document.getElementById('anim-pushes'),rec.pushes,0);
-    animateVal(document.getElementById('anim-roi'),Math.abs(rec.roi),1,rec.roi>=0?'+':'-','%');
-    animateVal(document.getElementById('anim-profit'),Math.abs(rec.profit),0,rec.profit>=0?'+$':'-$');
-  } catch(e) { setPanel('panel-record',`<div class="empty"><p>Failed: ${e.message}</p></div>`); }
+    const [rec, chartPts, allPicks] = await Promise.all([
+      fetchJSON('/api/record'),
+      fetchJSON('/api/chart'),
+      fetchJSON('/api/picks'),
+    ]);
+    setPanel('panel-record', renderRecord(rec, allPicks));
+    renderChart(chartPts);
+    animatePctBars();
+    animateVal(document.getElementById('anim-wins'),   rec.wins,   0);
+    animateVal(document.getElementById('anim-losses'), rec.losses, 0);
+    animateVal(document.getElementById('anim-pushes'), rec.pushes, 0);
+    animateVal(document.getElementById('anim-roi'),    Math.abs(rec.roi), 1, rec.roi >= 0 ? '+' : '-', '%');
+    animateVal(document.getElementById('anim-profit'), Math.abs(rec.profit), 0, rec.profit >= 0 ? '+$' : '-$');
+  } catch(e) {
+    setPanel('panel-record', `<div class="empty"><p>Failed to load: ${e.message}</p></div>`);
+  }
 }
 
 function getThisWeek(picks) {
-  const now=new Date(), day=now.getDay();
-  const start=new Date(now); start.setDate(now.getDate()-day); start.setHours(0,0,0,0);
-  let w=0,l=0,p=0;
+  const now = new Date(), day = now.getDay();
+  const start = new Date(now); start.setDate(now.getDate() - day); start.setHours(0,0,0,0);
+  let w=0, l=0, p=0;
   for (const pick of picks) {
     if (!pick.date) continue;
-    if (new Date(pick.date+'T00:00:00')>=start) {
-      const r=(pick.result||'').toUpperCase();
+    if (new Date(pick.date + 'T00:00:00') >= start) {
+      const r = (pick.result||'').toUpperCase();
       if (r==='W') w++; else if (r==='L') l++; else if (r==='P') p++;
     }
   }
-  return {w,l,p};
+  return { w, l, p };
 }
 
-function renderRecord(r,allPicks) {
-  const wC=r.win_pct>=52?'green':'red', prC=r.profit>=0?'green':'red', rC=r.roi>=0?'green':'red';
-  const wPP=Math.min(r.win_pct,100).toFixed(1), week=getThisWeek(allPicks);
-  const weekPct=(week.w+week.l)>0?(week.w/(week.w+week.l)*100).toFixed(0)+'%':'—';
-  let streakHtml='';
-  if (r.streak>0&&r.streak_type) {
-    const cls=r.streak_type==='W'?'streak-w':'streak-l';
-    const lbl=r.streak_type==='W'?`🔥 ${r.streak}-Game Win Streak`:`❄️ ${r.streak}-Game Losing Streak`;
-    streakHtml=`<div style="margin-top:10px"><span class="streak-badge ${cls}">${lbl}</span></div>`;
+function renderRecord(r, allPicks) {
+  const winColor    = r.win_pct >= 52 ? 'green' : 'red';
+  const profitColor = r.profit  >= 0  ? 'green' : 'red';
+  const roiColor    = r.roi     >= 0  ? 'green' : 'red';
+  const winPctPct   = Math.min(r.win_pct, 100).toFixed(1);
+  const week        = getThisWeek(allPicks);
+  const weekPct     = (week.w + week.l) > 0 ? (week.w / (week.w + week.l) * 100).toFixed(0) + '%' : '—';
+
+  let streakHtml = '';
+  if (r.streak > 0 && r.streak_type) {
+    const cls = r.streak_type === 'W' ? 'streak-w' : 'streak-l';
+    const lbl = r.streak_type === 'W' ? `🔥 ${r.streak}-Game Win Streak` : `❄️ ${r.streak}-Game Losing Streak`;
+    streakHtml = `<div style="margin-top:10px"><span class="streak-badge ${cls}">${lbl}</span></div>`;
   }
+
   return `
     <div class="record-hero">
       <div class="wlp">
-        <div class="wlp-item win"><div class="wlp-num" id="anim-wins">${r.wins}</div><div class="wlp-lbl">Wins</div></div>
-        <div class="wlp-item loss"><div class="wlp-num" id="anim-losses">${r.losses}</div><div class="wlp-lbl">Losses</div></div>
-        <div class="wlp-item push"><div class="wlp-num" id="anim-pushes">${r.pushes}</div><div class="wlp-lbl">Pushes</div></div>
-      </div>${streakHtml}
+        <div class="wlp-item win">
+          <div class="wlp-num" id="anim-wins">${r.wins}</div>
+          <div class="wlp-lbl">Wins</div>
+        </div>
+        <div class="wlp-item loss">
+          <div class="wlp-num" id="anim-losses">${r.losses}</div>
+          <div class="wlp-lbl">Losses</div>
+        </div>
+        <div class="wlp-item push">
+          <div class="wlp-num" id="anim-pushes">${r.pushes}</div>
+          <div class="wlp-lbl">Pushes</div>
+        </div>
+      </div>
+      ${streakHtml}
     </div>
+
     <div class="win-pct-bar-wrap">
-      <div class="win-pct-header"><span class="win-pct-title">Win Rate</span><span class="win-pct-val ${wC}">${r.win_pct}%</span></div>
-      <div class="pct-bar"><div class="pct-fill ${wC}" data-pct="${wPP}"></div></div>
-      <div class="pct-markers"><span>0%</span><span style="color:var(--accent);font-weight:700">Break-even: 52.4%</span><span>100%</span></div>
+      <div class="win-pct-header">
+        <span class="win-pct-title">Win Rate</span>
+        <span class="win-pct-val ${winColor}">${r.win_pct}%</span>
+      </div>
+      <div class="pct-bar">
+        <div class="pct-fill ${winColor}" data-pct="${winPctPct}"></div>
+      </div>
+      <div class="pct-markers">
+        <span>0%</span>
+        <span style="color:var(--accent);font-weight:700">Break-even: 52.4%</span>
+        <span>100%</span>
+      </div>
     </div>
+
     <div class="stats-grid">
-      <div class="stat-box"><div class="stat-val ${rC}" id="anim-roi">${r.roi>=0?'+':''}${r.roi}%</div><div class="stat-lbl">ROI</div></div>
-      <div class="stat-box"><div class="stat-val ${prC}" id="anim-profit">${r.profit>=0?'+':'-'}$${Math.abs(r.profit)}</div><div class="stat-lbl">Profit (units)</div></div>
+      <div class="stat-box">
+        <div class="stat-val ${roiColor}" id="anim-roi">${r.roi >= 0 ? '+' : ''}${r.roi}%</div>
+        <div class="stat-lbl">ROI</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val ${profitColor}" id="anim-profit">${r.profit >= 0 ? '+' : '-'}$${Math.abs(r.profit)}</div>
+        <div class="stat-lbl">Profit (units)</div>
+      </div>
     </div>
+
     <div class="week-box">
       <h3>📅 This Week</h3>
       <div class="week-record">
         <div class="week-item w"><div class="week-num">${week.w}</div><div class="week-lbl">Wins</div></div>
         <div class="week-item l"><div class="week-num">${week.l}</div><div class="week-lbl">Losses</div></div>
         <div class="week-item p"><div class="week-num">${week.p}</div><div class="week-lbl">Pushes</div></div>
-        <div class="week-item" style="background:var(--surface2)"><div class="week-num" style="color:var(--text)">${weekPct}</div><div class="week-lbl">Win %</div></div>
+        <div class="week-item"  style="background:var(--surface2)">
+          <div class="week-num" style="color:var(--text)">${weekPct}</div>
+          <div class="week-lbl">Win %</div>
+        </div>
       </div>
     </div>
-    <div class="chart-card"><h3>Cumulative Profit</h3><div class="chart-wrap"><canvas id="profit-chart"></canvas></div></div>`;
+
+    <div class="chart-card">
+      <h3>Cumulative Profit</h3>
+      <div class="chart-wrap"><canvas id="profit-chart"></canvas></div>
+    </div>`;
 }
 
 function renderChart(points) {
-  const ctx=document.getElementById('profit-chart'); if (!ctx) return;
-  if (chartInst){chartInst.destroy();chartInst=null;}
-  if (!points.length){ctx.parentElement.innerHTML='<div class="empty" style="padding:20px"><p>No completed picks yet</p></div>';return;}
-  const theme=getTheme(), last=points[points.length-1]?.profit??0;
-  const color=last>=0?'#00e676':'#ff4444', gridC=theme==='dark'?'#1a1a1a':'#e5e7eb', tickC=theme==='dark'?'#555':'#9ca3af';
-  chartInst=new Chart(ctx,{type:'line',data:{labels:points.map(p=>new Date(p.date+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})),datasets:[{data:points.map(p=>p.profit),borderColor:color,backgroundColor:last>=0?'rgba(0,230,118,0.08)':'rgba(255,68,68,0.08)',borderWidth:2,pointRadius:0,pointHoverRadius:5,fill:true,tension:0.4}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},animation:{duration:1000,easing:'easeOutQuart'},plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e1e1e',borderColor:'#333',borderWidth:1,titleColor:'#aaa',bodyColor:color,padding:10,callbacks:{label:ctx=>` ${ctx.raw>=0?'+':''}$${ctx.raw.toFixed(0)}`}}},scales:{x:{ticks:{color:tickC,font:{size:10},maxTicksLimit:6},grid:{color:gridC}},y:{ticks:{color:tickC,font:{size:10},callback:v=>(v>=0?'+':'')+'$'+v},grid:{color:gridC}}}}});
+  const ctx = document.getElementById('profit-chart');
+  if (!ctx) return;
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+  if (!points.length) {
+    ctx.parentElement.innerHTML = '<div class="empty" style="padding:20px"><p>No completed picks yet</p></div>';
+    return;
+  }
+
+  const theme  = getTheme();
+  const labels = points.map(p => { const d = new Date(p.date+'T00:00:00'); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); });
+  const data   = points.map(p => p.profit);
+  const last   = data[data.length-1] ?? 0;
+  const color  = last >= 0 ? '#00e676' : '#ff4444';
+  const gridC  = theme === 'dark' ? '#1a1a1a' : '#e5e7eb';
+  const tickC  = theme === 'dark' ? '#555' : '#9ca3af';
+
+  chartInst = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [{
+      data, borderColor: color,
+      backgroundColor: last >= 0 ? 'rgba(0,230,118,0.08)' : 'rgba(255,68,68,0.08)',
+      borderWidth: 2, pointRadius: 0, pointHoverRadius: 5,
+      fill: true, tension: 0.4,
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      animation: { duration:1000, easing:'easeOutQuart' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor:'#1e1e1e', borderColor:'#333', borderWidth:1,
+          titleColor:'#aaa', bodyColor:color, padding:10,
+          callbacks: { label: ctx => ` ${ctx.raw>=0?'+':''}$${ctx.raw.toFixed(0)}` }
+        }
+      },
+      scales: {
+        x: { ticks:{color:tickC,font:{size:10},maxTicksLimit:6}, grid:{color:gridC} },
+        y: { ticks:{color:tickC,font:{size:10},callback:v=>(v>=0?'+':'')+'$'+v}, grid:{color:gridC} }
+      }
+    }
+  });
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   HISTORY TAB
+══════════════════════════════════════════════════════════════════════ */
 async function loadHistory() {
-  setPanel('panel-history',spinner());
+  setPanel('panel-history', spinner());
   try {
-    const picks=await fetchJSON('/api/picks');
-    setPanel('panel-history',renderHistory(picks));
-  } catch(e){setPanel('panel-history',`<div class="empty"><p>Failed: ${e.message}</p></div>`);}
+    const picks = await fetchJSON('/api/picks');
+    setPanel('panel-history', renderHistory(picks));
+  } catch(e) {
+    setPanel('panel-history', `<div class="empty"><p>Failed to load: ${e.message}</p></div>`);
+  }
 }
 
 function renderHistory(picks) {
   if (!picks.length) return `<div class="empty"><div class="big">📜</div><p>No pick history yet</p></div>`;
-  const rows=picks.map(p=>{
-    const r=(p.result||'').toUpperCase(), cls=r==='W'?'result-w':r==='L'?'result-l':'result-p';
-    const lA=logoUrl(p.away_team), lH=logoUrl(p.home_team);
-    const iA=lA?`<img src="${lA}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`:'';
-    const iH=lH?`<img src="${lH}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`:'';
-    return `<tr><td>${formatDate(p.date)}</td><td>${iA}${abbrev(p.away_team)} @ ${iH}${abbrev(p.home_team)}</td><td>${abbrev(p.pick)}</td><td>${toDecimalOdds(p.pick_odds)||'—'}</td><td>${p.margin!=null?p.margin.toFixed(2):'—'}</td><td class="${cls}">${r||'—'}</td></tr>`;
+
+  const rows = picks.map(p => {
+    const r      = (p.result||'').toUpperCase();
+    const resCls = r==='W'?'result-w':r==='L'?'result-l':'result-p';
+    const margin = p.margin!=null ? p.margin.toFixed(2) : '—';
+    const odds   = toDecimalOdds(p.pick_odds) || '—';
+    const lA = logoUrl(p.away_team), lH = logoUrl(p.home_team);
+    const imgA = lA ? `<img src="${lA}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">` : '';
+    const imgH = lH ? `<img src="${lH}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">` : '';
+    return `<tr>
+      <td>${formatDate(p.date)}</td>
+      <td>${imgA}${abbrev(p.away_team)} @ ${imgH}${abbrev(p.home_team)}</td>
+      <td>${abbrev(p.pick)}</td>
+      <td>${odds}</td>
+      <td>${margin}</td>
+      <td class="${resCls}">${r||'—'}</td>
+    </tr>`;
   }).join('');
-  return `<div class="hist-table-wrap"><table><thead><tr><th>Date</th><th>Matchup</th><th>Pick</th><th>Odds</th><th>Edge</th><th>Result</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+
+  return `
+    <div class="hist-table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Matchup</th><th>Pick</th><th>Odds</th><th>Edge</th><th>Result</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════════════════════ */
 function toDecimalOdds(s) {
-  if (!s) return ''; const v=parseFloat(s); if (isNaN(v)) return s;
-  if (v<=-100) return (1+100/Math.abs(v)).toFixed(2);
-  if (v>=100)  return (1+v/100).toFixed(2);
+  if (!s) return '';
+  const v = parseFloat(s);
+  if (isNaN(v)) return s;
+  if (v <= -100) return (1 + 100/Math.abs(v)).toFixed(2);
+  if (v >= 100)  return (1 + v/100).toFixed(2);
   return v.toFixed(2);
 }
-function formatDate(d) { if (!d) return '—'; return new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
-function abbrev(name) { if (!name) return '—'; const p=name.split(' '); return p.length>=2?p[p.length-1]:name; }
+function formatDate(d) {
+  if (!d) return '—';
+  return new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
+function abbrev(name) {
+  if (!name) return '—';
+  const p = name.split(' ');
+  return p.length >= 2 ? p[p.length-1] : name;
+}
 
+/* ══════════════════════════════════════════════════════════════════════
+   LOAD & REFRESH
+══════════════════════════════════════════════════════════════════════ */
 function loadTab(tab) {
   if (tab==='today')   loadToday();
   if (tab==='record')  loadRecord();
   if (tab==='history') loadHistory();
 }
+
 function refreshAll() {
   loadTab(activeTab);
-  document.getElementById('last-refresh').textContent=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  const now = new Date();
+  document.getElementById('last-refresh').textContent =
+    now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
 }
+
 refreshAll();
-setInterval(refreshAll,REFRESH);
-if ('serviceWorker' in navigator){navigator.serviceWorker.register('/static/sw.js').catch(()=>{});}
+setInterval(refreshAll, REFRESH);
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+}
 </script>
 </body>
 </html>
