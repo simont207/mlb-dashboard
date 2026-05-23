@@ -7,6 +7,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MLB Picks" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="application-name" content="MLB Picks" />
   <title>MLB Picks ⚾</title>
   <link rel="manifest" href="/static/manifest.json" />
   <link rel="apple-touch-icon" href="/static/icon-192.png" />
@@ -575,6 +577,54 @@
       35%      { transform: translateY(-20px) rotate(160deg); }
       55%      { transform: translateY(-24px) rotate(200deg); }
     }
+
+    /* ── Pull to refresh ── */
+    #ptr-wrap {
+      position: fixed; top: 58px; left: 50%; z-index: 90;
+      transform: translateX(-50%) translateY(-60px);
+      width: 38px; height: 38px; border-radius: 50%;
+      background: var(--surface); border: 1px solid var(--border);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: none; pointer-events: none;
+    }
+    #ptr-wrap.releasing { transition: transform 0.25s, opacity 0.25s; }
+    #ptr-wrap.loading   { transform: translateX(-50%) translateY(8px) !important; opacity: 1 !important; }
+    #ptr-icon { font-size: 18px; transition: transform 0.2s; }
+    #ptr-icon.spin { animation: spin 0.7s linear infinite; }
+
+    /* ── Add to Home Screen banner ── */
+    #a2hs-banner {
+      position: fixed; bottom: calc(62px + env(safe-area-inset-bottom, 0px) + 8px);
+      left: 12px; right: 12px; z-index: 50;
+      background: var(--surface2); border: 1px solid rgba(0,230,118,0.25);
+      border-radius: 18px; padding: 14px 14px 14px 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      transform: translateY(120%); opacity: 0;
+      transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.35s;
+    }
+    #a2hs-banner.show { transform: translateY(0); opacity: 1; }
+    .a2hs-inner { display: flex; align-items: center; gap: 12px; }
+    .a2hs-icon-wrap {
+      width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      display: flex; align-items: center; justify-content: center; font-size: 22px;
+    }
+    .a2hs-text { flex: 1; }
+    .a2hs-title { font-size: 13px; font-weight: 800; color: var(--text); margin-bottom: 2px; }
+    .a2hs-sub   { font-size: 11px; color: var(--muted); line-height: 1.4; }
+    .a2hs-sub .share-icon { display: inline-block; background: #007aff; color: #fff; border-radius: 5px; padding: 0px 4px; font-size: 10px; font-weight: 700; }
+    .a2hs-close {
+      background: var(--border); border: none; border-radius: 50%;
+      width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; color: var(--muted); cursor: pointer; flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .a2hs-arrow {
+      text-align: center; margin-top: 10px; font-size: 11px; color: var(--accent);
+      font-weight: 700; letter-spacing: 0.3px;
+    }
+    .a2hs-arrow::before { content: '↓ '; }
   </style>
 </head>
 <body>
@@ -590,6 +640,7 @@
   </header>
 
   <div class="notif-toast" id="notif-toast"></div>
+  <div id="ptr-wrap"><span id="ptr-icon">↓</span></div>
 
   <main class="content">
     <div class="panel active" id="panel-today"></div>
@@ -1482,6 +1533,100 @@ refreshAll();
 setInterval(refreshAll,REFRESH);
 
 if('serviceWorker' in navigator){navigator.serviceWorker.register('/static/sw.js').catch(()=>{});}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PULL TO REFRESH
+══════════════════════════════════════════════════════════════════════ */
+(function(){
+  const content = document.querySelector('.content');
+  const wrap    = document.getElementById('ptr-wrap');
+  const icon    = document.getElementById('ptr-icon');
+  if (!content || !wrap) return;
+  let startY = 0, dragging = false, triggered = false;
+  const THRESHOLD = 65;
+
+  content.addEventListener('touchstart', e => {
+    if (content.scrollTop > 0) return;
+    startY   = e.touches[0].clientY;
+    dragging = true;
+    triggered = false;
+    wrap.classList.remove('releasing','loading');
+    wrap.style.transition = 'none';
+  }, { passive: true });
+
+  content.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const dist = Math.max(0, e.touches[0].clientY - startY);
+    if (dist <= 0) return;
+    const pull = Math.min(dist * 0.45, THRESHOLD);
+    wrap.style.transform = `translateX(-50%) translateY(${pull - 30}px)`;
+    wrap.style.opacity   = Math.min(pull / THRESHOLD, 1);
+    icon.style.transform = `rotate(${Math.min(pull / THRESHOLD * 180, 180)}deg)`;
+    triggered = dist > THRESHOLD;
+  }, { passive: true });
+
+  content.addEventListener('touchend', () => {
+    if (!dragging) return;
+    dragging = false;
+    wrap.classList.add('releasing');
+    if (triggered) {
+      wrap.classList.add('loading');
+      icon.textContent = '⟳';
+      icon.classList.add('spin');
+      haptic([10, 50, 10]);
+      refreshAll();
+      setTimeout(() => {
+        wrap.classList.remove('loading');
+        wrap.style.opacity = '0';
+        icon.textContent = '↓';
+        icon.classList.remove('spin');
+        icon.style.transform = '';
+      }, 1200);
+    } else {
+      wrap.style.opacity = '0';
+      icon.style.transform = '';
+    }
+    startY = 0;
+  }, { passive: true });
+})();
+
+/* ══════════════════════════════════════════════════════════════════════
+   ADD TO HOME SCREEN BANNER (iOS only, non-PWA)
+══════════════════════════════════════════════════════════════════════ */
+(function(){
+  const isIOS       = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isStandalone= window.navigator.standalone === true;
+  const dismissed   = localStorage.getItem('a2hsDismissed');
+  if (!isIOS || isStandalone || dismissed) return;
+
+  // Show after a short delay so page has settled
+  setTimeout(() => {
+    const banner = document.createElement('div');
+    banner.id = 'a2hs-banner';
+    banner.innerHTML = `
+      <div class="a2hs-inner">
+        <div class="a2hs-icon-wrap">⚾</div>
+        <div class="a2hs-text">
+          <div class="a2hs-title">Add MLB Picks to Home Screen</div>
+          <div class="a2hs-sub">Get push notifications when picks drop daily at 11:30am</div>
+        </div>
+        <button class="a2hs-close" onclick="dismissA2HS()">✕</button>
+      </div>
+      <div class="a2hs-arrow">Tap <span class="share-icon">Share</span> then "Add to Home Screen"</div>`;
+    document.body.appendChild(banner);
+    requestAnimationFrame(() => requestAnimationFrame(() => banner.classList.add('show')));
+  }, 2500);
+})();
+
+function dismissA2HS() {
+  haptic(8);
+  localStorage.setItem('a2hsDismissed', '1');
+  const banner = document.getElementById('a2hs-banner');
+  if (banner) {
+    banner.classList.remove('show');
+    setTimeout(() => banner.remove(), 350);
+  }
+}
 </script>
 </body>
 </html>
