@@ -678,7 +678,7 @@ function applyTheme(t) {
     chartInst.update();
   }
 }
-function toggleTheme() { applyTheme(getTheme()==='dark'?'light':'dark'); }
+function toggleTheme() { haptic(10); applyTheme(getTheme()==='dark'?'light':'dark'); }
 applyTheme(getTheme());
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -709,6 +709,7 @@ function updateNotifBtn() {
   });
 }
 async function handleNotifBtn() {
+  haptic(10);
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   if (!('Notification' in window)) {
     showToast(isIOS
@@ -973,6 +974,7 @@ function toggleReasoning(id) {
   const body=document.getElementById(`rd-${id}`);
   if(!btn||!body)return;
   const isOpen=body.classList.contains('open');
+  haptic(isOpen ? 6 : 12);
   body.classList.toggle('open',!isOpen);
   btn.classList.toggle('open',!isOpen);
   btn.querySelector('.arrow').textContent=isOpen?'▾':'▴';
@@ -988,6 +990,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const tab=btn.dataset.tab;
     if(tab===activeTab)return;
+    haptic(8);
     activeTab=tab;
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
@@ -1003,6 +1006,11 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 async function fetchJSON(url){const r=await fetch(url);if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}
 function spinner(){return '<div class="spinner"></div>';}
 function setPanel(id,h){document.getElementById(id).innerHTML=h;}
+
+/* ══════════════════════════════════════════════════════════════════════
+   HAPTIC FEEDBACK (Android Chrome; silent no-op on iOS/desktop)
+══════════════════════════════════════════════════════════════════════ */
+function haptic(pattern=10){if(navigator.vibrate)navigator.vibrate(pattern);}
 
 /* ══════════════════════════════════════════════════════════════════════
    ANIMATED COUNTERS
