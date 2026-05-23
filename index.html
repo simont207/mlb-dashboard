@@ -640,7 +640,7 @@ async function handleNotifBtn() {
 function maybeNotify(picks) {
   if (!picks.length) return;
   if (!('Notification' in window) || Notification.permission!=='granted') return;
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDate();
   const key   = 'notifSentDate';
   if (localStorage.getItem(key)===today) return;
   localStorage.setItem(key, today);
@@ -701,6 +701,7 @@ function buildStatusChip(game) {
     return `<span class="status-chip live">🔴 LIVE ${halfIcon}${inning||''}</span>`;
   }
   if (state === 'Final') return `<span class="status-chip final">🏁 Final</span>`;
+  // Pre-game — show countdown
   const gd = game.gameDate;
   if (!gd) return '';
   return `<span class="countdown-el status-chip" data-gametime="${gd}">⏱️ …</span>`;
@@ -907,9 +908,14 @@ function animatePctBars(){document.querySelectorAll('.pct-fill[data-pct]').forEa
 /* ══════════════════════════════════════════════════════════════════════
    LIVE SCORE TICKER
 ══════════════════════════════════════════════════════════════════════ */
+function localDate() {
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 async function loadLiveScores(myPicks) {
   try {
-    const today=new Date().toISOString().split('T')[0];
+    const today=localDate();
     const url=`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=linescore&gameType=R`;
     const data=await fetch(url).then(r=>r.json());
     const games=(data.dates||[]).flatMap(d=>d.games||[]);
@@ -989,7 +995,7 @@ async function _getTeamTopHitters(teamId,n=4){
 async function loadLineupWarnings(picks){
   if(!picks||!picks.length)return{};
   try{
-    const today=new Date().toISOString().split('T')[0];
+    const today=localDate();
     const schedData=await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=lineups&gameType=R`).then(r=>r.json());
     const gameLineups={};
     for(const de of(schedData.dates||[])){
