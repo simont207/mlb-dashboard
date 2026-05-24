@@ -298,6 +298,92 @@ def api_update_results():
     return jsonify({"ok": True, "updated": updated})
 
 
+# ── Auto result checker ──────────────────────────────────────────────────────────
+@app.route("/api/check_results", methods=["POST"])
+@require_api_secret
+def api_check_results():
+    """
+    Called by PebbleHost cron every 30 mins.
+    Checks today's pending picks against the MLB Stats API and updates results.
+    """
+    import requests as _req
+
+    today = date.today().isoformat()
+
+    # 1. Fetch today's pending picks from Supabase
+    resp = (supabase.table("picks")
+            .select("*")
+            .eq("date", today)
+            .execute())
+    all_picks = resp.data or []
+    pending   = [p for p in all_picks if not (p.get("result") or "").strip()]
+
+    if not pending:
+        return jsonify({"ok": True, "message": "No pending picks", "updated": 0})
+
+    # 2. Query MLB Stats API for today's final games
+    mlb_url = (
+        f"https://statsapi.mlb.com/api/v1/schedule"
+        f"?sportId=1&startDate={today}&endDate={today}"
+        f"&hydrate=linescore,game&gameType=R"
+    )
+    try:
+        mlb_resp = _req.get(
+            mlb_url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; mlb-result-checker/1.0)"},
+            timeout=20
+        )
+        mlb_resp.raise_for_status()
+        mlb_data = mlb_resp.json()
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+    # 3. Build final scores dict keyed by (away, home)
+    final_games = {}
+    for date_entry in mlb_data.get("dates", []):
+        for game in date_entry.get("games", []):
+            if game.get("status", {}).get("abstractGameState") != "Final":
+                continue
+            innings = game.get("linescore", {}).get("innings", [])
+            if len(innings) < 5:
+                continue
+            away      = game["teams"]["away"]["team"]["name"]
+            home      = game["teams"]["home"]["team"]["name"]
+            away_runs = sum(i.get("away", {}).get("runs", 0) for i in innings)
+            home_runs = sum(i.get("home", {}).get("runs", 0) for i in innings)
+            if away_runs > home_runs:
+                final_games[(away, home)] = away
+            elif home_runs > away_runs:
+                final_games[(away, home)] = home
+            else:
+                final_games[(away, home)] = "TIE"
+
+    # 4. Match picks to final games and update Supabase
+    updated = 0
+    details = []
+    for pick in pending:
+        away   = pick.get("away_team", "")
+        home   = pick.get("home_team", "")
+        chosen = pick.get("pick", "")
+        winner = final_games.get((away, home))
+        if winner is None:
+            continue   # game not finished yet
+
+        result = "P" if winner == "TIE" else ("W" if winner == chosen else "L")
+        supabase.table("picks").update({"result": result}).eq("id", pick["id"]).execute()
+        updated += 1
+        details.append({"game": f"{away} @ {home}", "pick": chosen, "result": result})
+
+    return jsonify({
+        "ok":      True,
+        "date":    today,
+        "updated": updated,
+        "details": details,
+        "finals":  len(final_games),
+        "pending": len(pending),
+    })
+
+
 # ── Health check ─────────────────────────────────────────────────────────────────
 @app.route("/health")
 def health():
@@ -345,6 +431,3 @@ def debug_info():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
-
-
-
