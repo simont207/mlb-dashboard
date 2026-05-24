@@ -48,8 +48,11 @@ def require_api_secret(f):
     def decorated(*args, **kwargs):
         if not API_SECRET:
             abort(500, "API_SECRET not configured on server")
-        if request.headers.get("X-API-Secret") != API_SECRET:
-            abort(401, "Invalid or missing X-API-Secret header")
+        # Accept secret via header OR URL param ?secret=...
+        provided = (request.headers.get("X-API-Secret")
+                    or request.args.get("secret", ""))
+        if provided != API_SECRET:
+            abort(401, "Invalid or missing API secret")
         return f(*args, **kwargs)
     return decorated
 
@@ -299,7 +302,7 @@ def api_update_results():
 
 
 # ── Auto result checker ──────────────────────────────────────────────────────────
-@app.route("/api/check_results", methods=["POST"])
+@app.route("/api/check_results", methods=["GET", "POST"])
 @require_api_secret
 def api_check_results():
     """
