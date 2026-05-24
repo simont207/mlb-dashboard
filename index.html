@@ -1401,8 +1401,10 @@ async function loadRecord(){
 }
 
 function getThisWeek(picks){
-  const now=new Date(),day=now.getDay();
-  const start=new Date(now);start.setDate(now.getDate()-day);start.setHours(0,0,0,0);
+  const now=new Date();
+  // Week starts Monday (getDay: 0=Sun,1=Mon...6=Sat). On Sunday treat as day 7 so Mon is still the start.
+  const day=now.getDay()===0?7:now.getDay();
+  const start=new Date(now);start.setDate(now.getDate()-(day-1));start.setHours(0,0,0,0);
   let w=0,l=0,p=0;
   for(const pick of picks){
     if(!pick.date)continue;
