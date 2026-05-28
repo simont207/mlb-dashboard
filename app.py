@@ -301,6 +301,80 @@ def api_update_results():
     return jsonify({"ok": True, "updated": updated})
 
 
+# ── F5 stats proxy (Render IP not blocked by MLB API) ────────────────────────────
+@app.route("/api/f5_stats", methods=["GET"])
+@require_api_secret
+def api_f5_stats():
+    """
+    Fetches season F5 stats from MLB Stats API using Render's unblocked IP.
+    Called by the PebbleHost bot instead of hitting MLB's API directly.
+    Returns scored_home, scored_away, allowed_home, allowed_away as JSON dicts.
+    """
+    import requests as _req
+    from collections import defaultdict as _dd
+    from datetime import datetime as _dt, timedelta as _td
+
+    SEASON_START = "2026-03-20"
+    yesterday    = (_dt.today() - _td(days=1)).strftime("%Y-%m-%d")
+    headers      = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept":     "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    scored_home  = _dd(list)
+    scored_away  = _dd(list)
+    allowed_home = _dd(list)
+    allowed_away = _dd(list)
+
+    current = _dt.strptime(SEASON_START, "%Y-%m-%d")
+    end     = _dt.strptime(yesterday,    "%Y-%m-%d")
+    errors  = []
+
+    while current <= end:
+        month_end = min(
+            (current.replace(day=1) + _td(days=32)).replace(day=1) - _td(days=1),
+            end
+        )
+        url = (
+            f"https://statsapi.mlb.com/api/v1/schedule"
+            f"?sportId=1&startDate={current.strftime('%Y-%m-%d')}"
+            f"&endDate={month_end.strftime('%Y-%m-%d')}"
+            f"&hydrate=linescore&gameType=R"
+        )
+        try:
+            resp = _req.get(url, headers=headers, timeout=25)
+            resp.raise_for_status()
+            for date_entry in resp.json().get("dates", []):
+                for game in date_entry.get("games", []):
+                    if game.get("status", {}).get("abstractGameState") != "Final":
+                        continue
+                    innings = game.get("linescore", {}).get("innings", [])
+                    if len(innings) < 5:
+                        continue
+                    away   = game["teams"]["away"]["team"]["name"]
+                    home   = game["teams"]["home"]["team"]["name"]
+                    away_f5 = sum(i.get("away", {}).get("runs", 0) for i in innings[:5])
+                    home_f5 = sum(i.get("home", {}).get("runs", 0) for i in innings[:5])
+                    scored_away[away].append(away_f5)
+                    scored_home[home].append(home_f5)
+                    allowed_away[away].append(home_f5)
+                    allowed_home[home].append(away_f5)
+        except Exception as e:
+            errors.append(f"{current.strftime('%Y-%m')}: {e}")
+
+        current = month_end + _td(days=1)
+
+    return jsonify({
+        "ok":          True,
+        "scored_home":  dict(scored_home),
+        "scored_away":  dict(scored_away),
+        "allowed_home": dict(allowed_home),
+        "allowed_away": dict(allowed_away),
+        "errors":       errors,
+    })
+
+
 # ── Auto result checker ──────────────────────────────────────────────────────────
 @app.route("/api/check_results", methods=["GET", "POST"])
 @require_api_secret
