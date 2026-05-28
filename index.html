@@ -1326,9 +1326,13 @@ async function loadToday(){
     const {ticker,games}    = await loadLiveScores(picks);
     const lineupWarnings    = await loadLineupWarnings(picks);
     updateTodayTabBadge(games);
-    // Load team stats in background (non-blocking)
+    // Load team stats in background — re-render Today panel when ready
     fetchJSON(`/api/team_stats?secret=mlbpicks2026`).then(d=>{
-      if(d&&d.teams){teamStats=d.teams; renderToday(picks,ticker,lineupWarnings,games,recData)&&setPanel('panel-today',renderToday(picks,ticker,lineupWarnings,games,recData));}
+      if(d&&d.teams){
+        teamStats=d.teams;
+        setPanel('panel-today', renderToday(picks,ticker,lineupWarnings,games,recData));
+        animateEdgeBars(); animateEdgeRings(); updateCountdowns();
+      }
     }).catch(()=>{});
     setPanel('panel-today', renderToday(picks, ticker, lineupWarnings, games, recData));
     animateEdgeBars();
