@@ -387,6 +387,15 @@
     .rd-bot-record { display:flex; align-items:center; gap:8px; background:var(--surface2); border-radius:10px; padding:8px 12px; margin-top:6px; }
     .rd-bot-record-badge { font-size:11px; font-weight:800; color:var(--accent); white-space:nowrap; }
     .rd-bot-record-text  { font-size:11px; color:var(--muted); line-height:1.4; }
+    .rd-team-form { display:flex; gap:10px; margin-top:6px; }
+    .rd-team-form-col { flex:1; background:var(--surface2); border-radius:10px; padding:10px; }
+    .rd-team-form-name { font-size:10px; font-weight:800; color:var(--accent); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+    .rd-team-form-dots { display:flex; gap:3px; margin-bottom:5px; }
+    .rd-form-dot { width:18px; height:18px; border-radius:50%; font-size:9px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+    .rd-form-dot.w { background:rgba(0,230,118,0.2); color:var(--win); }
+    .rd-form-dot.l { background:rgba(255,68,68,0.15); color:var(--loss); }
+    .rd-team-form-stat { font-size:10px; color:var(--muted); }
+    .rd-team-form-stat strong { color:var(--text); }
     .rd-bet-size { display:flex; align-items:center; justify-content:space-between; background:rgba(0,230,118,0.07); border:1px solid rgba(0,230,118,0.2); border-radius:10px; padding:9px 12px; margin-top:8px; }
     .rd-bet-size-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
     .rd-bet-size-val { font-size:15px; font-weight:900; color:var(--accent); }
@@ -1039,6 +1048,31 @@ function generateReasoning(p) {
     ${eraCompLine}${l3Line}
   </div>`;
 
+  // ── Team form & run production ────────────────────────────────────────────
+  const awayStats = teamStats[p.away_team] || null;
+  const homeStats = teamStats[p.home_team] || null;
+  function formDots(last5){
+    if(!last5||!last5.length) return '<span style="color:var(--muted);font-size:10px">No data</span>';
+    return last5.map(r=>`<div class="rd-form-dot ${r==='W'?'w':'l'}">${r}</div>`).join('');
+  }
+  const sForm = (awayStats||homeStats) ? `<div class="rd-section">
+    <div class="rd-section-title">📊 Team Form & Run Production</div>
+    <div class="rd-team-form">
+      <div class="rd-team-form-col">
+        <div class="rd-team-form-name">${p.away_team.split(' ').pop()}</div>
+        <div class="rd-team-form-dots">${formDots(awayStats&&awayStats.last5)}</div>
+        ${awayStats?`<div class="rd-team-form-stat">Last 5: <strong>${awayStats.last5_w}W-${awayStats.last5_l}L</strong></div>
+        <div class="rd-team-form-stat">F5 Avg: <strong>${awayStats.f5_scored_avg??'—'} scored</strong> / <strong>${awayStats.f5_allowed_avg??'—'} allowed</strong></div>`:''}
+      </div>
+      <div class="rd-team-form-col">
+        <div class="rd-team-form-name">${p.home_team.split(' ').pop()}</div>
+        <div class="rd-team-form-dots">${formDots(homeStats&&homeStats.last5)}</div>
+        ${homeStats?`<div class="rd-team-form-stat">Last 5: <strong>${homeStats.last5_w}W-${homeStats.last5_l}L</strong></div>
+        <div class="rd-team-form-stat">F5 Avg: <strong>${homeStats.f5_scored_avg??'—'} scored</strong> / <strong>${homeStats.f5_allowed_avg??'—'} allowed</strong></div>`:''}
+      </div>
+    </div>
+  </div>` : '';
+
   const isPickHome=!isAway;
   const s3=`<div class="rd-section">
     <div class="rd-section-title">🏟️ Game Context — Supporting Evidence</div>
@@ -1056,7 +1090,7 @@ function generateReasoning(p) {
   else if(edge>=1.5) verdictText=`<strong>${pickedLast} ML</strong> is a confident play. The edge of ${edge.toFixed(2)} clears the threshold comfortably, with the model's win probability outpacing market pricing. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
   else verdictText=`<strong>${pickedLast} ML</strong> qualifies on model edge at ${edge.toFixed(2)}. The model detects value the market hasn't fully priced. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
 
-  return `${s1}${s2}${s3}<div class="rd-verdict"><div class="rd-verdict-title">📋 Verdict</div><div class="rd-verdict-text">${verdictText}</div></div>`;
+  return `${s1}${s2}${sForm}${s3}<div class="rd-verdict"><div class="rd-verdict-title">📋 Verdict</div><div class="rd-verdict-text">${verdictText}</div></div>`;
 }
 
 function toggleReasoning(id) {
@@ -1075,6 +1109,7 @@ function toggleReasoning(id) {
 ══════════════════════════════════════════════════════════════════════ */
 let activeTab='today';
 let allPicks=[];           // global — loaded with record tab, used in buildReasoning
+let teamStats={};          // global — loaded with today tab, used in buildReasoning
 const REFRESH=5*60*1000;
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1291,6 +1326,10 @@ async function loadToday(){
     const {ticker,games}    = await loadLiveScores(picks);
     const lineupWarnings    = await loadLineupWarnings(picks);
     updateTodayTabBadge(games);
+    // Load team stats in background (non-blocking)
+    fetchJSON(`/api/team_stats?secret=mlbpicks2026`).then(d=>{
+      if(d&&d.teams){teamStats=d.teams; renderToday(picks,ticker,lineupWarnings,games,recData)&&setPanel('panel-today',renderToday(picks,ticker,lineupWarnings,games,recData));}
+    }).catch(()=>{});
     setPanel('panel-today', renderToday(picks, ticker, lineupWarnings, games, recData));
     animateEdgeBars();
     animateEdgeRings();
