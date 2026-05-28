@@ -26,6 +26,7 @@ Environment variables required:
 """
 
 import os
+import time
 from datetime import datetime, date, timedelta
 from functools import wraps
 
@@ -373,6 +374,115 @@ def api_f5_stats():
         "allowed_away": dict(allowed_away),
         "errors":       errors,
     })
+
+
+# ── Team stats (F5 averages + last 5 form) ───────────────────────────────────────
+_team_stats_cache = {"data": None, "ts": 0}
+
+@app.route("/api/team_stats", methods=["GET"])
+@require_api_secret
+def api_team_stats():
+    """
+    Returns per-team F5 run averages and last-5-game form.
+    Results cached for 1 hour to keep response fast.
+    """
+    import requests as _req
+    from collections import defaultdict as _dd
+    from datetime import datetime as _dt, timedelta as _td
+
+    now = time.time()
+    if _team_stats_cache["data"] and now - _team_stats_cache["ts"] < 3600:
+        return jsonify(_team_stats_cache["data"])
+
+    SEASON_START = "2026-03-20"
+    yesterday    = (_dt.today() - _td(days=1)).strftime("%Y-%m-%d")
+    two_weeks    = (_dt.today() - _td(days=16)).strftime("%Y-%m-%d")
+    hdrs = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    # ── 1. Season F5 stats (month by month) ──────────────────────────────────
+    scored_home  = _dd(list); scored_away  = _dd(list)
+    allowed_home = _dd(list); allowed_away = _dd(list)
+
+    current = _dt.strptime(SEASON_START, "%Y-%m-%d")
+    end     = _dt.strptime(yesterday,    "%Y-%m-%d")
+    while current <= end:
+        month_end = min(
+            (current.replace(day=1) + _td(days=32)).replace(day=1) - _td(days=1), end
+        )
+        url = (f"https://statsapi.mlb.com/api/v1/schedule"
+               f"?sportId=1&startDate={current.strftime('%Y-%m-%d')}"
+               f"&endDate={month_end.strftime('%Y-%m-%d')}"
+               f"&hydrate=linescore&gameType=R")
+        try:
+            resp = _req.get(url, headers=hdrs, timeout=25)
+            resp.raise_for_status()
+            for de in resp.json().get("dates", []):
+                for game in de.get("games", []):
+                    if game.get("status", {}).get("abstractGameState") != "Final":
+                        continue
+                    innings = game.get("linescore", {}).get("innings", [])
+                    if len(innings) < 5:
+                        continue
+                    away = game["teams"]["away"]["team"]["name"]
+                    home = game["teams"]["home"]["team"]["name"]
+                    af5  = sum(i.get("away", {}).get("runs", 0) for i in innings[:5])
+                    hf5  = sum(i.get("home", {}).get("runs", 0) for i in innings[:5])
+                    scored_away[away].append(af5);  scored_home[home].append(hf5)
+                    allowed_away[away].append(hf5); allowed_home[home].append(af5)
+        except Exception:
+            pass
+        current = month_end + _td(days=1)
+
+    # ── 2. Last 5 game results per team ──────────────────────────────────────
+    last5 = _dd(list)   # team -> list of "W"/"L" (chronological)
+    try:
+        url = (f"https://statsapi.mlb.com/api/v1/schedule"
+               f"?sportId=1&startDate={two_weeks}&endDate={yesterday}"
+               f"&hydrate=linescore&gameType=R")
+        resp = _req.get(url, headers=hdrs, timeout=25)
+        resp.raise_for_status()
+        for de in resp.json().get("dates", []):
+            for game in de.get("games", []):
+                if game.get("status", {}).get("abstractGameState") != "Final":
+                    continue
+                innings = game.get("linescore", {}).get("innings", [])
+                if not innings:
+                    continue
+                away = game["teams"]["away"]["team"]["name"]
+                home = game["teams"]["home"]["team"]["name"]
+                ar   = sum(i.get("away", {}).get("runs", 0) for i in innings)
+                hr   = sum(i.get("home", {}).get("runs", 0) for i in innings)
+                if ar > hr:
+                    last5[away].append("W"); last5[home].append("L")
+                elif hr > ar:
+                    last5[home].append("W"); last5[away].append("L")
+    except Exception:
+        pass
+
+    # ── 3. Build per-team output ──────────────────────────────────────────────
+    all_teams = set(list(scored_home)+list(scored_away))
+    teams = {}
+    for team in all_teams:
+        scored  = scored_home.get(team, []) + scored_away.get(team, [])
+        allowed = allowed_home.get(team, []) + allowed_away.get(team, [])
+        form    = last5.get(team, [])[-5:]
+        wins5   = form.count("W")
+        teams[team] = {
+            "f5_scored_avg":  round(sum(scored)/len(scored),   1) if scored  else None,
+            "f5_allowed_avg": round(sum(allowed)/len(allowed), 1) if allowed else None,
+            "last5":          form,
+            "last5_w":        wins5,
+            "last5_l":        len(form) - wins5,
+        }
+
+    result = {"ok": True, "teams": teams, "cached_at": int(now)}
+    _team_stats_cache["data"] = result
+    _team_stats_cache["ts"]   = now
+    return jsonify(result)
 
 
 # ── Yesterday results proxy ───────────────────────────────────────────────────────
