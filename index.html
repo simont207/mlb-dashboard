@@ -958,7 +958,7 @@ function generateReasoning(p) {
   // ── Bot historical record at this edge tier ───────────────────────────────
   const edgeFloor = edge>=2.0?2.0:edge>=1.5?1.5:edge>=1.25?1.25:1.0;
   const tierLabel = edge>=2.0?'2.0+':edge>=1.5?'1.5–1.99':edge>=1.25?'1.25–1.49':'1.00–1.24';
-  const tierPicks = (typeof allPicks!=='undefined'?allPicks:[]).filter(pk=>{
+  const tierPicks = allPicks.filter(pk=>{
     const m=parseFloat(pk.margin||0);
     const r=(pk.result||'').toUpperCase();
     return m>=edgeFloor && (r==='W'||r==='L'||r==='P');
@@ -1074,6 +1074,7 @@ function toggleReasoning(id) {
    STATE & TABS
 ══════════════════════════════════════════════════════════════════════ */
 let activeTab='today';
+let allPicks=[];           // global — loaded with record tab, used in buildReasoning
 const REFRESH=5*60*1000;
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1427,7 +1428,8 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
 async function loadRecord(){
   setPanel('panel-record',spinner());
   try{
-    const[rec,chartPts,allPicks]=await Promise.all([fetchJSON('/api/record'),fetchJSON('/api/chart'),fetchJSON('/api/picks')]);
+    const[rec,chartPts,_picks]=await Promise.all([fetchJSON('/api/record'),fetchJSON('/api/chart'),fetchJSON('/api/picks')]);
+    allPicks=_picks||[];
     setPanel('panel-record',renderRecord(rec,allPicks));
     renderChart(chartPts);
     animatePctBars();
