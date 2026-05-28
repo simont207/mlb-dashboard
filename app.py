@@ -375,6 +375,68 @@ def api_f5_stats():
     })
 
 
+# ── Yesterday results proxy ───────────────────────────────────────────────────────
+@app.route("/api/yesterday_results", methods=["GET"])
+@require_api_secret
+def api_yesterday_results():
+    """
+    Proxy for fetching and saving yesterday's results via Render's unblocked IP.
+    Called by the bot instead of hitting MLB's API directly from PebbleHost.
+    """
+    import requests as _req
+
+    target_date = request.args.get("date") or (date.today() - timedelta(days=1)).isoformat()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    url = (
+        f"https://statsapi.mlb.com/api/v1/schedule"
+        f"?sportId=1&startDate={target_date}&endDate={target_date}"
+        f"&hydrate=linescore&gameType=R"
+    )
+    try:
+        resp = _req.get(url, headers=headers, timeout=25)
+        resp.raise_for_status()
+        mlb_data = resp.json()
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+    # Fetch picks for that date from Supabase
+    picks_resp = supabase.table("picks").select("*").eq("date", target_date).execute()
+    picks = [p for p in (picks_resp.data or []) if not (p.get("result") or "").strip()]
+
+    # Build final scores
+    final_games = {}
+    for date_entry in mlb_data.get("dates", []):
+        for game in date_entry.get("games", []):
+            if game.get("status", {}).get("abstractGameState") != "Final":
+                continue
+            innings = game.get("linescore", {}).get("innings", [])
+            if len(innings) < 5:
+                continue
+            away = game["teams"]["away"]["team"]["name"]
+            home = game["teams"]["home"]["team"]["name"]
+            away_runs = sum(i.get("away", {}).get("runs", 0) for i in innings)
+            home_runs = sum(i.get("home", {}).get("runs", 0) for i in innings)
+            final_games[(away, home)] = away if away_runs > home_runs else (home if home_runs > away_runs else "TIE")
+
+    # Update results in Supabase
+    updated = 0
+    details = []
+    for pick in picks:
+        winner = final_games.get((pick["away_team"], pick["home_team"]))
+        if winner is None:
+            continue
+        result = "P" if winner == "TIE" else ("W" if winner == pick["pick"] else "L")
+        supabase.table("picks").update({"result": result}).eq("id", pick["id"]).execute()
+        updated += 1
+        details.append({"game": f"{pick['away_team']} @ {pick['home_team']}", "result": result})
+
+    return jsonify({"ok": True, "date": target_date, "updated": updated, "details": details})
+
+
 # ── Auto result checker ──────────────────────────────────────────────────────────
 @app.route("/api/check_results", methods=["GET", "POST"])
 @require_api_secret
