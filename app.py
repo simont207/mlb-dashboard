@@ -1,572 +1,1673 @@
-#!/usr/bin/env python3
-"""
-MLB Picks Dashboard — Flask + Supabase backend
-================================================
-Supabase table (create this manually in Supabase SQL editor):
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#00e676" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MLB Picks" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="application-name" content="MLB Picks" />
+  <title>MLB Picks ⚾</title>
+  <link rel="manifest" href="/static/manifest.json" />
+  <link rel="apple-touch-icon" href="/static/icon-192.png" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    CREATE TABLE picks (
-      id           BIGSERIAL PRIMARY KEY,
-      date         DATE,
-      away_team    TEXT,
-      home_team    TEXT,
-      away_pitcher TEXT,
-      home_pitcher TEXT,
-      pick         TEXT,
-      margin       FLOAT,
-      pick_odds    TEXT,
-      type         TEXT,
-      result       TEXT DEFAULT '',
-      created_at   TIMESTAMPTZ DEFAULT NOW()
-    );
-
-Environment variables required:
-    SUPABASE_URL  — your Supabase project URL
-    SUPABASE_KEY  — your Supabase anon/service key
-    API_SECRET    — shared secret the bot sends in X-API-Secret header
-"""
-
-import os
-from datetime import datetime, date, timedelta
-from functools import wraps
-
-from flask import Flask, jsonify, request, render_template, abort, make_response, redirect
-from supabase import create_client, Client
-
-app = Flask(__name__, static_folder="static", template_folder=".")
-
-# ── Supabase client ─────────────────────────────────────────────────────────────
-SUPABASE_URL       = os.environ["SUPABASE_URL"]
-SUPABASE_KEY       = os.environ["SUPABASE_KEY"]
-API_SECRET         = os.environ.get("API_SECRET", "")
-DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
-
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# ── Auth decorator ───────────────────────────────────────────────────────────────
-def require_api_secret(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not API_SECRET:
-            abort(500, "API_SECRET not configured on server")
-        # Accept secret via header OR URL param ?secret=...
-        provided = (request.headers.get("X-API-Secret")
-                    or request.args.get("secret", ""))
-        if provided != API_SECRET:
-            abort(401, "Invalid or missing API secret")
-        return f(*args, **kwargs)
-    return decorated
-
-
-# ── Frontend ─────────────────────────────────────────────────────────────────────
-@app.route("/")
-def index():
-    if DASHBOARD_PASSWORD:
-        auth = request.cookies.get("auth")
-        if auth != DASHBOARD_PASSWORD:
-            return render_template("login.html")
-    return render_template("index.html")
-
-@app.route("/login", methods=["POST"])
-def login():
-    password = request.form.get("password", "")
-    if password == DASHBOARD_PASSWORD:
-        resp = make_response(redirect("/"))
-        resp.set_cookie("auth", password, max_age=60*60*24*30)
-        return resp
-    return render_template("login.html", error="Wrong password")
-
-
-# ── Odds helper ──────────────────────────────────────────────────────────────────
-def odds_payout(odds_str, bet=100):
-    """Return profit on a winning bet.
-    Auto-detects decimal odds (e.g. 1.91, 2.50) vs American odds (e.g. -110, +150).
-    Defaults to decimal 1.91 (-110 equivalent) if missing or unparseable."""
-    try:
-        val = float(str(odds_str).replace('+', '').strip())
-        if 1.01 <= val < 100:
-            # Decimal odds: profit = bet * (odds - 1)
-            return round(bet * (val - 1), 2)
-        elif val >= 100:
-            # American positive odds: +150 means win 150 per 100 risked
-            return round(bet * val / 100, 2)
-        elif val <= -100:
-            # American negative odds: -164 means win 100 per 164 risked
-            return round(bet * 100 / abs(val), 2)
-        else:
-            return round(bet * 0.9091, 2)  # fallback -110 / 1.91
-    except (ValueError, TypeError):
-        return round(bet * 0.9091, 2)  # fallback -110 / 1.91
-
-
-# ── API: Overall record ──────────────────────────────────────────────────────────
-@app.route("/api/record")
-def api_record():
-    resp = supabase.table("picks").select("result, type, pick_odds").execute()
-    rows = resp.data or []
-
-    wins = losses = pushes = 0
-    profit = 0.0
-    total_risked = 0.0
-
-    for row in rows:
-        r = (row.get("result") or "").strip().upper()
-        if r == "W":
-            wins += 1
-            profit += odds_payout(row.get("pick_odds"))
-            total_risked += 100
-        elif r == "L":
-            losses += 1
-            profit -= 100
-            total_risked += 100
-        elif r == "P":
-            pushes += 1
-
-    total_decided = wins + losses
-    win_pct = round(wins / total_decided * 100, 1) if total_decided > 0 else 0.0
-    roi     = round(profit / total_risked * 100, 2) if total_risked > 0 else 0.0
-    profit  = round(profit, 2)
-
-    # Current streak
-    all_resp = (supabase.table("picks")
-                .select("result, date")
-                .not_.is_("result", "null")
-                .neq("result", "")
-                .order("date", desc=True)
-                .order("id", desc=True)
-                .execute())
-    streak_rows = all_resp.data or []
-
-    streak = 0
-    streak_type = ""
-    for row in streak_rows:
-        r = (row.get("result") or "").strip().upper()
-        if r == "P":
-            continue
-        if streak == 0:
-            streak_type = r
-            streak = 1
-        elif r == streak_type:
-            streak += 1
-        else:
-            break
-
-    return jsonify({
-        "wins":        wins,
-        "losses":      losses,
-        "pushes":      pushes,
-        "win_pct":     win_pct,
-        "roi":         roi,
-        "profit":      profit,
-        "streak":      streak,
-        "streak_type": streak_type,
-    })
-
-
-# ── API: Today's picks ───────────────────────────────────────────────────────────
-@app.route("/api/today")
-def api_today():
-    today = date.today().isoformat()
-    resp  = (supabase.table("picks")
-             .select("*")
-             .eq("date", today)
-             .order("margin", desc=True)
-             .execute())
-    return jsonify(resp.data or [])
-
-
-# ── API: Pick history (last 100) ─────────────────────────────────────────────────
-@app.route("/api/picks")
-def api_picks():
-    resp = (supabase.table("picks")
-            .select("*")
-            .order("date", desc=True)
-            .order("id", desc=True)
-            .limit(100)
-            .execute())
-    return jsonify(resp.data or [])
-
-
-# ── API: Chart data ───────────────────────────────────────────────────────────────
-@app.route("/api/chart")
-def api_chart():
-    resp = (supabase.table("picks")
-            .select("date, result, pick_odds")
-            .not_.is_("result", "null")
-            .neq("result", "")
-            .order("date")
-            .order("id")
-            .execute())
-    rows = resp.data or []
-
-    points     = []
-    cumulative = 0.0
-
-    for row in rows:
-        r = (row.get("result") or "").strip().upper()
-        if r == "W":
-            cumulative += odds_payout(row.get("pick_odds"))
-        elif r == "L":
-            cumulative -= 100
-        # pushes don't change profit
-        points.append({"date": row["date"], "profit": round(cumulative, 2)})
-
-    return jsonify(points)
-
-
-# ── API: Log a pick (bot → dashboard) ────────────────────────────────────────────
-@app.route("/api/log_pick", methods=["POST"])
-@require_api_secret
-def api_log_pick():
-    """
-    Expected JSON body:
-    {
-        "date":         "2026-05-17",
-        "away_team":    "New York Yankees",
-        "home_team":    "Boston Red Sox",
-        "away_pitcher": "Gerrit Cole",
-        "home_pitcher": "Nathan Eovaldi",
-        "pick":         "New York Yankees",
-        "margin":       1.45,
-        "pick_odds":    "-130",
-        "type":         "strong"
-    }
-    """
-    data = request.get_json(force=True, silent=True)
-    if not data:
-        abort(400, "JSON body required")
-
-    required = ["date", "away_team", "home_team", "pick"]
-    missing  = [k for k in required if not data.get(k)]
-    if missing:
-        abort(400, f"Missing fields: {', '.join(missing)}")
-
-    record = {
-        "date":            data["date"],
-        "away_team":       data["away_team"],
-        "home_team":       data["home_team"],
-        "away_pitcher":    data.get("away_pitcher", ""),
-        "home_pitcher":    data.get("home_pitcher", ""),
-        "pick":            data["pick"],
-        "margin":          data.get("margin"),
-        "pick_odds":       str(data["pick_odds"]) if data.get("pick_odds") is not None else None,
-        "type":            data.get("type", "pick"),
-        "away_era":        data.get("away_era"),
-        "home_era":        data.get("home_era"),
-        "away_recent_era": data.get("away_recent_era"),
-        "home_recent_era": data.get("home_recent_era"),
-        "result":          "",
+    :root, [data-theme="dark"] {
+      --bg:       #0a0a0a;
+      --surface:  #141414;
+      --surface2: #1e1e1e;
+      --border:   #252525;
+      --accent:   #00e676;
+      --accent2:  #00b359;
+      --text:     #f0f0f0;
+      --muted:    #777;
+      --win:      #00e676;
+      --loss:     #ff4444;
+      --push:     #888;
+      --shadow:   rgba(0,0,0,0.4);
+      --chart-grid: #1a1a1a;
+      --chart-tick: #555;
     }
 
-    resp = supabase.table("picks").insert(record).execute()
-    return jsonify({"ok": True, "id": resp.data[0]["id"] if resp.data else None}), 201
-
-
-# ── API: Update results (bot → dashboard) ────────────────────────────────────────
-@app.route("/api/update_results", methods=["POST"])
-@require_api_secret
-def api_update_results():
-    """
-    Expected JSON body:
-    {
-        "date": "2026-05-16",
-        "results": [
-            {
-                "away_team": "New York Yankees",
-                "home_team": "Boston Red Sox",
-                "result":    "W"
-            },
-            ...
-        ]
-    }
-    """
-    data = request.get_json(force=True, silent=True)
-    if not data or "date" not in data or "results" not in data:
-        abort(400, "JSON body with 'date' and 'results' required")
-
-    target_date = data["date"]
-    updated     = 0
-
-    for item in data["results"]:
-        result = (item.get("result") or "").strip().upper()
-        if result not in ("W", "L", "P", "?"):
-            continue
-        (supabase.table("picks")
-         .update({"result": result})
-         .eq("date", target_date)
-         .eq("away_team", item["away_team"])
-         .eq("home_team", item["home_team"])
-         .execute())
-        updated += 1
-
-    return jsonify({"ok": True, "updated": updated})
-
-
-# ── F5 stats proxy (Render IP not blocked by MLB API) ────────────────────────────
-@app.route("/api/f5_stats", methods=["GET"])
-@require_api_secret
-def api_f5_stats():
-    """
-    Fetches season F5 stats from MLB Stats API using Render's unblocked IP.
-    Called by the PebbleHost bot instead of hitting MLB's API directly.
-    Returns scored_home, scored_away, allowed_home, allowed_away as JSON dicts.
-    """
-    import requests as _req
-    from collections import defaultdict as _dd
-    from datetime import datetime as _dt, timedelta as _td
-
-    SEASON_START = "2026-03-20"
-    yesterday    = (_dt.today() - _td(days=1)).strftime("%Y-%m-%d")
-    headers      = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept":     "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
+    [data-theme="light"] {
+      --bg:       #f2f4f7;
+      --surface:  #ffffff;
+      --surface2: #eef0f4;
+      --border:   #dde1e9;
+      --accent:   #00a04a;
+      --accent2:  #007a38;
+      --text:     #111827;
+      --muted:    #6b7280;
+      --win:      #00a04a;
+      --loss:     #dc2626;
+      --push:     #9ca3af;
+      --shadow:   rgba(0,0,0,0.1);
+      --chart-grid: #e5e7eb;
+      --chart-tick: #9ca3af;
     }
 
-    scored_home  = _dd(list)
-    scored_away  = _dd(list)
-    allowed_home = _dd(list)
-    allowed_away = _dd(list)
-
-    current = _dt.strptime(SEASON_START, "%Y-%m-%d")
-    end     = _dt.strptime(yesterday,    "%Y-%m-%d")
-    errors  = []
-
-    while current <= end:
-        month_end = min(
-            (current.replace(day=1) + _td(days=32)).replace(day=1) - _td(days=1),
-            end
-        )
-        url = (
-            f"https://statsapi.mlb.com/api/v1/schedule"
-            f"?sportId=1&startDate={current.strftime('%Y-%m-%d')}"
-            f"&endDate={month_end.strftime('%Y-%m-%d')}"
-            f"&hydrate=linescore&gameType=R"
-        )
-        try:
-            resp = _req.get(url, headers=headers, timeout=25)
-            resp.raise_for_status()
-            for date_entry in resp.json().get("dates", []):
-                for game in date_entry.get("games", []):
-                    if game.get("status", {}).get("abstractGameState") != "Final":
-                        continue
-                    innings = game.get("linescore", {}).get("innings", [])
-                    if len(innings) < 5:
-                        continue
-                    away   = game["teams"]["away"]["team"]["name"]
-                    home   = game["teams"]["home"]["team"]["name"]
-                    away_f5 = sum(i.get("away", {}).get("runs", 0) for i in innings[:5])
-                    home_f5 = sum(i.get("home", {}).get("runs", 0) for i in innings[:5])
-                    scored_away[away].append(away_f5)
-                    scored_home[home].append(home_f5)
-                    allowed_away[away].append(home_f5)
-                    allowed_home[home].append(away_f5)
-        except Exception as e:
-            errors.append(f"{current.strftime('%Y-%m')}: {e}")
-
-        current = month_end + _td(days=1)
-
-    return jsonify({
-        "ok":          True,
-        "scored_home":  dict(scored_home),
-        "scored_away":  dict(scored_away),
-        "allowed_home": dict(allowed_home),
-        "allowed_away": dict(allowed_away),
-        "errors":       errors,
-    })
-
-
-# ── Yesterday results proxy ───────────────────────────────────────────────────────
-@app.route("/api/yesterday_results", methods=["GET"])
-@require_api_secret
-def api_yesterday_results():
-    """
-    Proxy for fetching and saving yesterday's results via Render's unblocked IP.
-    Called by the bot instead of hitting MLB's API directly from PebbleHost.
-    """
-    import requests as _req
-
-    target_date = request.args.get("date") or (date.today() - timedelta(days=1)).isoformat()
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
+      transition: background 0.3s, color 0.3s;
     }
-    url = (
-        f"https://statsapi.mlb.com/api/v1/schedule"
-        f"?sportId=1&startDate={target_date}&endDate={target_date}"
-        f"&hydrate=linescore&gameType=R"
-    )
-    try:
-        resp = _req.get(url, headers=headers, timeout=25)
-        resp.raise_for_status()
-        mlb_data = resp.json()
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 502
 
-    # Fetch picks for that date from Supabase
-    picks_resp = supabase.table("picks").select("*").eq("date", target_date).execute()
-    picks = [p for p in (picks_resp.data or []) if not (p.get("result") or "").strip()]
+    #app { display: flex; flex-direction: column; height: 100%; max-width: 480px; margin: 0 auto; }
 
-    # Build final scores
-    final_games = {}
-    for date_entry in mlb_data.get("dates", []):
-        for game in date_entry.get("games", []):
-            if game.get("status", {}).get("abstractGameState") != "Final":
-                continue
-            innings = game.get("linescore", {}).get("innings", [])
-            if len(innings) < 5:
-                continue
-            away = game["teams"]["away"]["team"]["name"]
-            home = game["teams"]["home"]["team"]["name"]
-            away_runs = sum(i.get("away", {}).get("runs", 0) for i in innings)
-            home_runs = sum(i.get("home", {}).get("runs", 0) for i in innings)
-            final_games[(away, home)] = away if away_runs > home_runs else (home if home_runs > away_runs else "TIE")
+    /* ── Header ── */
+    header {
+      padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+      position: sticky; top: 0; background: var(--bg); z-index: 10;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .header-logo {
+      width: 34px; height: 34px;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    header h1 { font-size: 17px; font-weight: 800; letter-spacing: -0.3px; flex: 1; }
+    .header-actions { display: flex; align-items: center; gap: 6px; }
+    .icon-btn {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .icon-btn:active { transform: scale(0.92); }
+    .subtitle { font-size: 10px; color: var(--muted); white-space: nowrap; }
 
-    # Update results in Supabase
-    updated = 0
-    details = []
-    for pick in picks:
-        winner = final_games.get((pick["away_team"], pick["home_team"]))
-        if winner is None:
-            continue
-        result = "P" if winner == "TIE" else ("W" if winner == pick["pick"] else "L")
-        supabase.table("picks").update({"result": result}).eq("id", pick["id"]).execute()
-        updated += 1
-        details.append({"game": f"{pick['away_team']} @ {pick['home_team']}", "result": result})
+    /* ── Content ── */
+    .content {
+      flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      padding: 12px 12px calc(60px + env(safe-area-inset-bottom, 0px) + 12px);
+    }
 
-    return jsonify({"ok": True, "date": target_date, "updated": updated, "details": details})
+    /* ── Tab bar ── */
+    nav {
+      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+      width: 100%; max-width: 480px;
+      height: calc(60px + env(safe-area-inset-bottom, 0px));
+      background: var(--surface); border-top: 1px solid var(--border);
+      display: flex; padding-bottom: env(safe-area-inset-bottom, 0px);
+      z-index: 20; transition: background 0.3s, border-color 0.3s;
+    }
+    .tab-btn {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 3px; background: none; border: none;
+      color: var(--muted); font-size: 10px; font-weight: 700;
+      letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer;
+      transition: color 0.15s; -webkit-tap-highlight-color: transparent;
+      position: relative;
+    }
+    .tab-btn .icon { font-size: 22px; line-height: 1; }
+    .tab-btn.active { color: var(--accent); }
 
+    /* Live badge on Today tab */
+    .tab-live-badge {
+      position: absolute; top: 8px; right: calc(50% - 14px);
+      background: #ff4444; color: #fff; font-size: 9px; font-weight: 900;
+      width: 16px; height: 16px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid var(--surface);
+    }
 
-# ── Auto result checker ──────────────────────────────────────────────────────────
-@app.route("/api/check_results", methods=["GET", "POST"])
-@require_api_secret
-def api_check_results():
-    """
-    Called by PebbleHost cron every 30 mins.
-    Checks today's pending picks against the MLB Stats API and updates results.
-    """
-    import requests as _req
+    .nav-action-btn {
+      flex: 0 0 52px; display: none; align-items: center; justify-content: center;
+      background: none; border: none; border-left: 1px solid var(--border);
+      font-size: 22px; cursor: pointer; color: var(--muted);
+      -webkit-tap-highlight-color: transparent;
+      transition: color 0.15s, opacity 0.15s;
+    }
+    .nav-action-btn:active { opacity: 0.5; }
 
-    today = date.today().isoformat()
+    .panel { display: none; }
+    .panel.active { display: block; }
 
-    # 1. Fetch today's pending picks from Supabase
-    resp = (supabase.table("picks")
-            .select("*")
-            .eq("date", today)
-            .execute())
-    all_picks = resp.data or []
-    pending   = [p for p in all_picks if not (p.get("result") or "").strip()]
+    /* ── Toast ── */
+    .notif-toast {
+      position: fixed; top: 70px; left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: var(--accent); color: #000;
+      font-size: 13px; font-weight: 700; padding: 10px 18px;
+      border-radius: 20px; z-index: 100; opacity: 0;
+      transition: opacity 0.3s, transform 0.3s; pointer-events: none;
+      max-width: 320px; text-align: center;
+      box-shadow: 0 4px 20px rgba(0,230,118,0.3);
+    }
+    .notif-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-    if not pending:
-        return jsonify({"ok": True, "message": "No pending picks", "updated": 0})
+    /* ── Live Score Ticker ── */
+    .ticker-wrap { margin-bottom: 12px; }
+    .ticker-label {
+      font-size: 10px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .live-dot {
+      width: 6px; height: 6px; background: #ff4444; border-radius: 50%;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+    .ticker-scroll {
+      display: flex; gap: 8px; overflow-x: auto;
+      -webkit-overflow-scrolling: touch; padding-bottom: 4px; scrollbar-width: none;
+    }
+    .ticker-scroll::-webkit-scrollbar { display: none; }
+    .score-chip {
+      flex-shrink: 0; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 11px 13px; min-width: 162px;
+      transition: border-color 0.2s, transform 0.15s, box-shadow 0.15s;
+      text-decoration: none; color: inherit; display: block; cursor: pointer;
+    }
+    .score-chip:hover { border-color: var(--accent2); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .score-chip:active { transform: scale(0.97); }
+    .score-chip.is-pick { border-color: var(--accent2); background: rgba(0,179,89,0.06); }
+    .score-chip-teams { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+    .score-team { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; }
+    .score-runs { font-weight: 900; font-size: 16px; color: var(--text); }
+    .score-sep  { font-size: 12px; color: var(--muted); }
+    .score-status { font-size: 11px; color: var(--muted); text-align: center; }
+    .score-status.live { color: #ff6b6b; font-weight: 700; }
 
-    # 2. Query MLB Stats API for today's final games
-    mlb_url = (
-        f"https://statsapi.mlb.com/api/v1/schedule"
-        f"?sportId=1&startDate={today}&endDate={today}"
-        f"&hydrate=linescore,game&gameType=R"
-    )
-    try:
-        mlb_resp = _req.get(
-            mlb_url,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; mlb-result-checker/1.0)"},
-            timeout=20
-        )
-        mlb_resp.raise_for_status()
-        mlb_data = mlb_resp.json()
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 502
+    /* ── Pick Cards ── */
+    .pick-card {
+      display: flex;
+      background: linear-gradient(145deg, var(--surface) 0%, rgba(8,8,8,0.97) 100%);
+      border: 1px solid rgba(255,255,255,0.07); border-radius: 18px;
+      margin-bottom: 12px; overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+      transition: transform 0.15s, box-shadow 0.15s, background 0.3s, border-color 0.3s;
+    }
+    .pick-card:active { transform: scale(0.985); }
 
-    # 3. Build final scores dict keyed by (away, home)
-    final_games = {}
-    for date_entry in mlb_data.get("dates", []):
-        for game in date_entry.get("games", []):
-            if game.get("status", {}).get("abstractGameState") != "Final":
-                continue
-            innings = game.get("linescore", {}).get("innings", [])
-            if len(innings) < 5:
-                continue
-            away      = game["teams"]["away"]["team"]["name"]
-            home      = game["teams"]["home"]["team"]["name"]
-            away_runs = sum(i.get("away", {}).get("runs", 0) for i in innings)
-            home_runs = sum(i.get("home", {}).get("runs", 0) for i in innings)
-            if away_runs > home_runs:
-                final_games[(away, home)] = away
-            elif home_runs > away_runs:
-                final_games[(away, home)] = home
-            else:
-                final_games[(away, home)] = "TIE"
+    /* Elite glow — edge ≥ 2.0 */
+    .pick-card.elite-glow {
+      border-color: var(--accent2);
+      box-shadow: 0 0 0 1px rgba(0,179,89,0.4), 0 0 20px rgba(0,230,118,0.15);
+      animation: elite-pulse 3s ease-in-out infinite;
+    }
+    @keyframes elite-pulse {
+      0%, 100% { box-shadow: 0 0 0 1px rgba(0,179,89,0.4), 0 0 20px rgba(0,230,118,0.12); }
+      50%       { box-shadow: 0 0 0 1px rgba(0,179,89,0.6), 0 0 30px rgba(0,230,118,0.25); }
+    }
 
-    # 4. Match picks to final games and update Supabase
-    updated = 0
-    details = []
-    for pick in pending:
-        away   = pick.get("away_team", "")
-        home   = pick.get("home_team", "")
-        chosen = pick.get("pick", "")
-        winner = final_games.get((away, home))
-        if winner is None:
-            continue   # game not finished yet
+    .pick-card-accent {
+      width: 4px;
+      background: linear-gradient(180deg, var(--accent), var(--accent2));
+      flex-shrink: 0;
+    }
+    .pick-card.elite-glow .pick-card-accent {
+      background: linear-gradient(180deg, #00e676, #00b359, #00e676);
+      background-size: 100% 200%;
+      animation: accent-slide 2s linear infinite;
+    }
+    @keyframes accent-slide { 0% { background-position: 0 0; } 100% { background-position: 0 200%; } }
 
-        result = "P" if winner == "TIE" else ("W" if winner == chosen else "L")
-        supabase.table("picks").update({"result": result}).eq("id", pick["id"]).execute()
-        updated += 1
-        details.append({"game": f"{away} @ {home}", "pick": chosen, "result": result})
+    .pick-card-body { flex: 1; padding: 14px; position: relative; }
 
-    return jsonify({
-        "ok":      True,
-        "date":    today,
-        "updated": updated,
-        "details": details,
-        "finals":  len(final_games),
-        "pending": len(pending),
-    })
+    /* Pick of the Day crown */
+    .potd-crown {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 10px; font-weight: 900; letter-spacing: 0.8px;
+      text-transform: uppercase; color: #ffd700;
+      background: rgba(255,215,0,0.1); border: 1px solid rgba(255,215,0,0.3);
+      border-radius: 20px; padding: 4px 10px; margin-bottom: 10px;
+      width: fit-content;
+    }
 
+    /* Game over banner */
+    .game-over-banner {
+      border-radius: 8px; padding: 8px 12px;
+      font-size: 12px; font-weight: 800; text-align: center;
+      margin-bottom: 10px; letter-spacing: 0.3px;
+    }
+    .game-over-banner.won  { background: rgba(0,230,118,0.12); color: var(--win);  border: 1px solid rgba(0,179,89,0.3); }
+    .game-over-banner.lost { background: rgba(255,68,68,0.10); color: var(--loss); border: 1px solid rgba(255,68,68,0.25); }
+    .game-over-banner.push { background: rgba(136,136,136,0.1); color: var(--push); border: 1px solid rgba(136,136,136,0.2); }
 
-# ── Health check ─────────────────────────────────────────────────────────────────
-@app.route("/health")
-def health():
-    return jsonify({"status": "ok", "ts": datetime.utcnow().isoformat()})
+    /* Matchup logos row */
+    .matchup-logos { display: flex; align-items: center; margin-bottom: 10px; }
+    .team-block { flex: 1; display: flex; align-items: center; gap: 8px; }
+    .team-block.home { flex-direction: row-reverse; text-align: right; }
+    .team-logo { width: 38px; height: 38px; object-fit: contain; flex-shrink: 0; }
+    .team-info { flex: 1; }
+    .team-city { font-size: 10px; color: var(--muted); line-height: 1.2; }
+    .team-name { font-size: 13px; font-weight: 800; line-height: 1.2; }
+    .vs-badge {
+      width: 26px; height: 26px; background: var(--surface2); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 800; color: var(--muted);
+      flex-shrink: 0; margin: 0 6px;
+    }
 
+    /* Countdown + park badge row */
+    .meta-row {
+      display: flex; align-items: center; gap: 6px;
+      flex-wrap: wrap; margin-bottom: 8px;
+    }
+    .status-chip {
+      font-size: 10px; font-weight: 700; padding: 3px 8px;
+      border-radius: 20px; background: var(--surface2);
+      border: 1px solid var(--border); color: var(--muted);
+      white-space: nowrap;
+    }
+    .status-chip.live   { background: rgba(255,68,68,0.12); color: #ff6b6b; border-color: rgba(255,68,68,0.25); }
+    .status-chip.final  { background: var(--surface2); color: var(--muted); }
+    .park-badge {
+      font-size: 10px; font-weight: 700; padding: 3px 8px;
+      border-radius: 20px; white-space: nowrap;
+    }
+    .park-badge.hitter  { background: rgba(255,100,0,0.12); color: #ff8c42; border: 1px solid rgba(255,100,0,0.25); }
+    .park-badge.pitcher { background: rgba(100,180,255,0.12); color: #64b5f6; border: 1px solid rgba(100,180,255,0.25); }
 
-# ── Debug endpoint ────────────────────────────────────────────────────────────────
-@app.route("/debug")
-def debug_info():
-    import httpx
-    url_safe = SUPABASE_URL[:40] + "..." if len(SUPABASE_URL) > 40 else SUPABASE_URL
-    key_safe = SUPABASE_KEY[:12] + "..." if len(SUPABASE_KEY) > 12 else "MISSING"
-    results  = {}
+    /* Live score bar on card */
+    .live-score-bar {
+      background: rgba(255,68,68,0.07); border: 1px solid rgba(255,68,68,0.2);
+      border-radius: 8px; padding: 7px 10px; margin-bottom: 10px;
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 11px;
+    }
+    .live-score-bar .lsb-status { color: #ff6b6b; font-weight: 800; }
+    .live-score-bar .lsb-score  { color: var(--text); font-weight: 700; }
+    .live-score-bar strong       { font-size: 14px; }
 
-    # Test 1: raw HTTP call bypassing supabase-py
-    try:
-        rest_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/picks?select=id&limit=1"
-        headers  = {
-            "apikey":        SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
+    /* Pick line */
+    .pick-winner-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .pick-winner-line { font-size: 15px; font-weight: 800; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+    .odds-chip {
+      display: inline-block; background: rgba(0,179,89,0.12);
+      border: 1px solid rgba(0,179,89,0.3); border-radius: 6px;
+      padding: 1px 7px; font-size: 11px; font-weight: 700; color: var(--accent);
+    }
+
+    /* Edge bar */
+    .edge-bar-wrap { margin-bottom: 10px; }
+    .edge-bar-label { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+    .edge-bar { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .edge-fill {
+      height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent));
+      border-radius: 3px; width: 0;
+      transition: width 1.3s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    /* Lineup warning */
+    .lineup-warn {
+      background: rgba(255,68,68,0.08); border: 1px solid rgba(255,68,68,0.28);
+      border-radius: 8px; padding: 7px 10px; font-size: 11px;
+      color: #ff7070; margin-bottom: 10px; line-height: 1.45;
+    }
+    .lineup-warn strong { color: #ff4444; }
+
+    /* ERA section */
+    .era-section {
+      background: var(--surface2); border-radius: 10px;
+      padding: 8px 10px; font-size: 11px; color: var(--muted); margin-bottom: 10px;
+    }
+    .era-row { display: flex; justify-content: space-between; align-items: center; }
+    .era-row + .era-row { margin-top: 4px; }
+    .era-name { font-weight: 600; }
+    .era-val  { font-weight: 800; color: var(--text); }
+    .era-l3   { color: var(--muted); font-size: 10px; }
+
+    /* Reasoning toggle */
+    .reasoning-toggle {
+      width: 100%; background: none; border: 1px solid var(--border);
+      border-radius: 8px; padding: 7px 10px; color: var(--muted);
+      font-size: 11px; font-weight: 600; cursor: pointer; text-align: left;
+      display: flex; align-items: center; justify-content: space-between;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .reasoning-toggle:hover { background: var(--surface2); border-color: var(--accent2); }
+    .reasoning-toggle .arrow { transition: transform 0.25s; font-style: normal; }
+    .reasoning-toggle.open .arrow { transform: rotate(180deg); }
+    .reasoning-body {
+      display: none; margin-top: 8px; background: var(--surface2);
+      border-radius: 10px; padding: 12px; font-size: 12px; color: var(--muted);
+    }
+    .reasoning-body.open { display: block; }
+
+    /* ── Pro Reasoning Breakdown ── */
+    .rd-section { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .rd-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .rd-section-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--text); margin-bottom: 8px; }
+    .rd-pitcher-row { display: flex; align-items: stretch; gap: 6px; margin-bottom: 8px; }
+    .rd-pitcher { flex: 1; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 6px; }
+    .rd-pitcher.rd-win { border-color: var(--accent2); background: rgba(0,179,89,0.07); }
+    .rd-pitcher-name { font-size: 12px; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rd-pitcher-team { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+    .rd-era-big { font-size: 24px; font-weight: 900; line-height: 1; color: var(--text); }
+    .rd-era-lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+    .rd-l3 { font-size: 10px; font-weight: 700; margin-top: 5px; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+    .rd-l3.hot  { background: rgba(0,230,118,0.15); color: var(--win); }
+    .rd-l3.cold { background: rgba(255,68,68,0.15);  color: var(--loss); }
+    .rd-l3.flat { background: var(--surface2); color: var(--muted); }
+    .rd-vs { font-size: 10px; font-weight: 900; color: var(--muted); flex-shrink: 0; display: flex; align-items: center; }
+    .rd-line { font-size: 11px; line-height: 1.55; padding: 5px 8px; border-radius: 6px; margin-bottom: 4px; }
+    .rd-line:last-child { margin-bottom: 0; }
+    .rd-line.good    { background: rgba(0,230,118,0.08); color: var(--text); }
+    .rd-line.warn    { background: rgba(255,180,0,0.08); color: var(--text); }
+    .rd-line.bad     { background: rgba(255,68,68,0.08);  color: var(--text); }
+    .rd-line.neutral { background: var(--surface); color: var(--muted); }
+    .rd-line strong  { color: var(--text); font-weight: 800; }
+    .rd-stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 5px; margin-bottom: 8px; }
+    .rd-stat { text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 4px; }
+    .rd-stat-val { font-size: 14px; font-weight: 900; color: var(--text); }
+    .rd-stat-lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; margin-top: 1px; }
+    .rd-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; margin-bottom: 8px; }
+    .rd-verdict { background: var(--surface); border-radius: 10px; padding: 10px 12px; border-left: 3px solid var(--accent); }
+    .rd-verdict-title { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 5px; }
+    .rd-verdict-text { font-size: 12px; line-height: 1.55; }
+    .rd-edge-hero { background: linear-gradient(135deg, rgba(0,179,89,0.12), rgba(0,230,118,0.05)); border: 1px solid var(--accent2); border-radius: 12px; padding: 14px; margin-bottom: 8px; text-align: center; }
+    .rd-edge-hero-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); margin-bottom: 2px; }
+    .rd-edge-score { font-size: 44px; font-weight: 900; line-height: 1; color: var(--accent); letter-spacing: -2px; }
+    .rd-edge-desc { font-size: 10px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
+    .rd-edge-tier { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; margin-top: 7px; margin-bottom: 2px; }
+    .rd-edge-tier.elite    { background: rgba(0,230,118,0.2); color: var(--win); border: 1px solid rgba(0,179,89,0.5); }
+    .rd-edge-tier.strong   { background: rgba(0,230,118,0.15); color: var(--win); }
+    .rd-edge-tier.moderate { background: rgba(255,180,0,0.15); color: #ffb400; }
+    .rd-edge-tier.threshold { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    .rd-gauge-wrap { margin: 10px 0 4px; background: var(--surface2); border-radius: 99px; height: 7px; overflow: hidden; }
+    .rd-gauge-bar  { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent2), var(--accent)); transition: width 1s cubic-bezier(0.4,0,0.2,1); }
+    .rd-bot-record { display:flex; align-items:center; gap:8px; background:var(--surface2); border-radius:10px; padding:8px 12px; margin-top:6px; }
+    .rd-bot-record-badge { font-size:11px; font-weight:800; color:var(--accent); white-space:nowrap; }
+    .rd-bot-record-text  { font-size:11px; color:var(--muted); line-height:1.4; }
+    .rd-bet-size { display:flex; align-items:center; justify-content:space-between; background:rgba(0,230,118,0.07); border:1px solid rgba(0,230,118,0.2); border-radius:10px; padding:9px 12px; margin-top:8px; }
+    .rd-bet-size-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
+    .rd-bet-size-val { font-size:15px; font-weight:900; color:var(--accent); }
+    .rd-bet-size-note { font-size:10px; color:var(--muted); text-align:right; }
+
+    /* ── Record tab (UNCHANGED) ── */
+    .record-hero {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 22px 20px 18px; text-align: center;
+      margin-bottom: 10px; position: relative; overflow: hidden;
+    }
+    .record-hero::before {
+      content: ''; position: absolute; top: -50px; left: 50%; transform: translateX(-50%);
+      width: 220px; height: 220px;
+      background: radial-gradient(circle, rgba(0,230,118,0.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .wlp { display: flex; justify-content: center; margin-bottom: 12px; }
+    .wlp-item { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
+    .wlp-item + .wlp-item::before { content: ''; position: absolute; left: 0; top: 10%; height: 80%; width: 1px; background: var(--border); }
+    .wlp-num { font-size: 44px; font-weight: 900; line-height: 1; letter-spacing: -2px; }
+    .wlp-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 4px; }
+    .wlp-item.win  .wlp-num { color: var(--win); }
+    .wlp-item.loss .wlp-num { color: var(--loss); }
+    .wlp-item.push .wlp-num { color: var(--push); }
+    .streak-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; }
+    .streak-w { background: rgba(0,230,118,0.15); color: var(--win); }
+    .streak-l { background: rgba(255,68,68,0.15);  color: var(--loss); }
+    .win-pct-bar-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
+    .win-pct-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .win-pct-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .win-pct-val   { font-size: 22px; font-weight: 900; }
+    .win-pct-val.green { color: var(--win); }
+    .win-pct-val.red   { color: var(--loss); }
+    .pct-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
+    .pct-fill { height: 100%; border-radius: 4px; width: 0; transition: width 1.3s cubic-bezier(0.4,0,0.2,1); }
+    .pct-fill.green { background: linear-gradient(90deg, var(--accent2), var(--accent)); }
+    .pct-fill.red   { background: linear-gradient(90deg, #991b1b, var(--loss)); }
+    .pct-markers { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); }
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 12px; text-align: center; }
+    .stat-val { font-size: 22px; font-weight: 900; letter-spacing: -0.5px; }
+    .stat-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
+    .stat-val.green { color: var(--win); }
+    .stat-val.red   { color: var(--loss); }
+    .week-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
+    .week-box h3 { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+    .week-record { display: flex; gap: 8px; }
+    .week-item { flex: 1; text-align: center; background: var(--surface2); border-radius: 10px; padding: 10px 6px; }
+    .week-num { font-size: 20px; font-weight: 800; }
+    .week-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+    .week-item.w .week-num { color: var(--win); }
+    .week-item.l .week-num { color: var(--loss); }
+    .week-item.p .week-num { color: var(--push); }
+    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+    .chart-card h3 { font-size: 11px; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .chart-wrap { position: relative; height: 180px; }
+
+    /* ── History tab ── */
+    .hist-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 14px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+    thead th { background: var(--surface2); color: var(--muted); font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px; text-align: left; border-bottom: 1px solid var(--border); }
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody td { padding: 10px; color: var(--text); background: var(--surface); transition: background 0.1s; }
+    tbody tr:hover td { background: var(--surface2); }
+    .result-w { color: var(--win);  font-weight: 800; }
+    .result-l { color: var(--loss); font-weight: 800; }
+    .result-p { color: var(--push); font-weight: 700; }
+
+    /* ── Empty / Spinner ── */
+    .empty { text-align: center; padding: 50px 20px; color: var(--muted); }
+    .empty .big { font-size: 48px; margin-bottom: 10px; }
+    .empty p    { font-size: 14px; }
+    .spinner { display: flex; justify-content: center; padding: 40px; }
+    .spinner::after { content: ''; width: 30px; height: 30px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .refresh-note { text-align: center; font-size: 11px; color: var(--muted); padding: 6px 0 10px; }
+
+    /* ── iOS Safari fix ── */
+    html { height: -webkit-fill-available; }
+    body { min-height: 100vh; min-height: -webkit-fill-available; }
+    #app { min-height: 100vh; min-height: -webkit-fill-available; }
+
+    /* ── Mobile ── */
+    @media (max-width: 480px) {
+      header { padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 8px; gap: 8px; }
+      .header-logo { width: 28px; height: 28px; font-size: 15px; border-radius: 8px; }
+      header h1 { font-size: 15px; }
+      .header-actions { display: none; }
+      .nav-action-btn { display: flex; }
+      .content { padding: 10px 10px calc(62px + env(safe-area-inset-bottom, 0px) + 10px); }
+      .pick-card-body { padding: 12px 11px; }
+      .pick-card { border-radius: 14px; }
+      .team-logo { width: 32px; height: 32px; }
+      .team-block { gap: 6px; }
+      .team-name { font-size: 12px; }
+      .team-city { font-size: 9px; }
+      .vs-badge { width: 22px; height: 22px; font-size: 9px; margin: 0 4px; }
+      .pick-winner-line { font-size: 14px; }
+      .odds-chip { font-size: 10px; padding: 1px 6px; }
+      .era-section { font-size: 10px; padding: 7px 9px; }
+      .era-val { font-size: 11px; }
+      .edge-bar-label { font-size: 10px; }
+      .wlp-num { font-size: 38px; letter-spacing: -1px; }
+      .stat-val { font-size: 20px; }
+      .stat-box { padding: 12px 10px; }
+      .score-chip { min-width: 148px; padding: 10px 11px; }
+      .score-team { font-size: 12px; gap: 3px; }
+      .score-runs { font-size: 15px; }
+      .chart-wrap { height: 160px; }
+      .streak-badge { font-size: 12px; padding: 4px 12px; }
+      .week-num { font-size: 18px; }
+    }
+
+    @media (max-width: 380px) {
+      .subtitle { font-size: 10px; }
+      header h1 { font-size: 14px; }
+      .pick-card-body { padding: 10px 10px; }
+      .team-logo { width: 27px; height: 27px; }
+      .team-name { font-size: 11px; }
+      .wlp-num { font-size: 34px; }
+      .wlp-lbl { font-size: 9px; letter-spacing: 1px; }
+      .stat-val { font-size: 18px; }
+      .stats-grid { gap: 6px; }
+    }
+
+    @media (max-height: 500px) and (orientation: landscape) {
+      header { padding: calc(6px + env(safe-area-inset-top, 0px)) 14px 5px; }
+      .content { padding-top: 6px; }
+      .chart-wrap { height: 130px; }
+      .record-hero { padding: 14px 16px 12px; }
+      .wlp-num { font-size: 32px; }
+    }
+
+    /* ── Animated top accent bar ── */
+    body::before {
+      content: ''; position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 200;
+      background: linear-gradient(90deg, var(--accent2), var(--accent), #00ffaa, var(--accent), var(--accent2));
+      background-size: 300% 100%;
+      animation: topBarFlow 4s linear infinite;
+    }
+    @keyframes topBarFlow { to { background-position: -300% 0; } }
+
+    /* ── Panel tab fade (safe — only applied dynamically, never on initial load) ── */
+    .panel.tab-anim { animation: panelFadeIn 0.3s cubic-bezier(0.4,0,0.2,1); }
+    @keyframes panelFadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Card slide-in ── */
+    @keyframes cardSlideIn {
+      from { opacity: 0; transform: translateY(22px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Edge Ring ── */
+    .edge-ring-wrap { position: relative; width: 60px; height: 60px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .edge-ring-svg { position: absolute; top: 0; left: 0; }
+    .edge-ring-track { fill: none; stroke: var(--border); stroke-width: 4; }
+    .edge-ring-fill { fill: none; stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 1.4s cubic-bezier(0.4,0,0.2,1); }
+    .edge-ring-fill.elite    { stroke: var(--accent); filter: drop-shadow(0 0 5px rgba(0,230,118,0.55)); }
+    .edge-ring-fill.strong   { stroke: var(--accent); }
+    .edge-ring-fill.moderate { stroke: #ffb400; }
+    .edge-ring-fill.threshold{ stroke: #888; }
+    .edge-ring-center { position: relative; text-align: center; }
+    .edge-ring-val { font-size: 13px; font-weight: 900; color: var(--text); line-height: 1; }
+    .edge-ring-sub { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }
+
+    /* ── Streak fire banner ── */
+    .streak-fire-banner { background: linear-gradient(135deg, rgba(255,100,0,0.12), rgba(255,180,0,0.07)); border: 1px solid rgba(255,140,0,0.28); border-radius: 16px; padding: 13px 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px; }
+    .streak-fire-emoji { font-size: 28px; animation: fireWiggle 1.1s ease-in-out infinite alternate; flex-shrink: 0; }
+    @keyframes fireWiggle { from { transform: scale(1) rotate(-4deg); } to { transform: scale(1.14) rotate(4deg); } }
+    .streak-fire-text { flex: 1; }
+    .streak-fire-title { font-size: 14px; font-weight: 900; color: #ff8c42; }
+    .streak-fire-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Result pills (history tab) ── */
+    .result-pill { display: inline-flex; align-items: center; justify-content: center; padding: 3px 9px; border-radius: 6px; font-size: 11px; font-weight: 900; }
+    .result-pill.win  { background: rgba(0,230,118,0.12); color: var(--win);  border: 1px solid rgba(0,179,89,0.25); }
+    .result-pill.loss { background: rgba(255,68,68,0.10);  color: var(--loss); border: 1px solid rgba(255,68,68,0.22); }
+    .result-pill.push { background: rgba(136,136,136,0.1); color: var(--push); border: 1px solid rgba(136,136,136,0.2); }
+
+    /* ── Win/loss glow on record numbers ── */
+    .wlp-item.win  .wlp-num { text-shadow: 0 0 28px rgba(0,230,118,0.35); }
+    .wlp-item.loss .wlp-num { text-shadow: 0 0 28px rgba(255,68,68,0.25); }
+
+    /* ── Stat box glow ── */
+    .stat-box.positive { border-color: rgba(0,179,89,0.25); box-shadow: 0 4px 20px rgba(0,230,118,0.08); }
+    .stat-box.negative { border-color: rgba(255,68,68,0.22); box-shadow: 0 4px 20px rgba(255,68,68,0.08); }
+
+    /* ── Bouncing baseball for empty state ── */
+    .empty .big { display: inline-block; animation: baseballBounce 2.3s ease-in-out infinite; }
+    @keyframes baseballBounce {
+      0%,100% { transform: translateY(0) rotate(0deg); }
+      35%      { transform: translateY(-20px) rotate(160deg); }
+      55%      { transform: translateY(-24px) rotate(200deg); }
+    }
+
+    /* ── Pull to refresh ── */
+    #ptr-wrap {
+      position: fixed; top: 58px; left: 50%; z-index: 90;
+      transform: translateX(-50%) translateY(-60px);
+      width: 38px; height: 38px; border-radius: 50%;
+      background: var(--surface); border: 1px solid var(--border);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: none; pointer-events: none;
+    }
+    #ptr-wrap.releasing { transition: transform 0.25s, opacity 0.25s; }
+    #ptr-wrap.loading   { transform: translateX(-50%) translateY(8px) !important; opacity: 1 !important; }
+    #ptr-icon { font-size: 18px; transition: transform 0.2s; }
+    #ptr-icon.spin { animation: spin 0.7s linear infinite; }
+
+    /* ── Add to Home Screen banner ── */
+    #a2hs-banner {
+      position: fixed; bottom: calc(62px + env(safe-area-inset-bottom, 0px) + 8px);
+      left: 12px; right: 12px; z-index: 50;
+      background: var(--surface2); border: 1px solid rgba(0,230,118,0.25);
+      border-radius: 18px; padding: 14px 14px 14px 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      transform: translateY(120%); opacity: 0;
+      transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.35s;
+    }
+    #a2hs-banner.show { transform: translateY(0); opacity: 1; }
+    .a2hs-inner { display: flex; align-items: center; gap: 12px; }
+    .a2hs-icon-wrap {
+      width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      display: flex; align-items: center; justify-content: center; font-size: 22px;
+    }
+    .a2hs-text { flex: 1; }
+    .a2hs-title { font-size: 13px; font-weight: 800; color: var(--text); margin-bottom: 2px; }
+    .a2hs-sub   { font-size: 11px; color: var(--muted); line-height: 1.4; }
+    .a2hs-sub .share-icon { display: inline-block; background: #007aff; color: #fff; border-radius: 5px; padding: 0px 4px; font-size: 10px; font-weight: 700; }
+    .a2hs-close {
+      background: var(--border); border: none; border-radius: 50%;
+      width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; color: var(--muted); cursor: pointer; flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .a2hs-arrow {
+      text-align: center; margin-top: 10px; font-size: 11px; color: var(--accent);
+      font-weight: 700; letter-spacing: 0.3px;
+    }
+    .a2hs-arrow::before { content: '↓ '; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="header-logo">⚾</div>
+    <h1>MLB Picks Bot</h1>
+    <div class="header-actions">
+      <span class="subtitle" id="last-refresh">Loading…</span>
+      <button class="icon-btn" id="notif-btn" onclick="handleNotifBtn()" title="Notifications">🔔</button>
+      <button class="icon-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+    </div>
+  </header>
+
+  <div class="notif-toast" id="notif-toast"></div>
+  <div id="ptr-wrap"><span id="ptr-icon">↓</span></div>
+
+  <main class="content">
+    <div class="panel active" id="panel-today"></div>
+    <div class="panel"        id="panel-record"></div>
+    <div class="panel"        id="panel-history"></div>
+  </main>
+
+  <nav>
+    <button class="tab-btn active" data-tab="today">
+      <span class="icon">📅</span>Today
+    </button>
+    <button class="tab-btn" data-tab="record">
+      <span class="icon">📊</span>Record
+    </button>
+    <button class="tab-btn" data-tab="history">
+      <span class="icon">📜</span>History
+    </button>
+    <button class="nav-action-btn" id="notif-btn-nav" onclick="handleNotifBtn()">🔕</button>
+    <button class="nav-action-btn" id="theme-btn-nav" onclick="toggleTheme()">🌙</button>
+  </nav>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   TEAM LOGOS
+══════════════════════════════════════════════════════════════════════ */
+const TEAM_IDS = {
+  "Arizona Diamondbacks":109,"Atlanta Braves":144,"Baltimore Orioles":110,
+  "Boston Red Sox":111,"Chicago Cubs":112,"Chicago White Sox":145,
+  "Cincinnati Reds":113,"Cleveland Guardians":114,"Colorado Rockies":115,
+  "Detroit Tigers":116,"Houston Astros":117,"Kansas City Royals":118,
+  "Los Angeles Angels":108,"Los Angeles Dodgers":119,"Miami Marlins":146,
+  "Milwaukee Brewers":158,"Minnesota Twins":142,"New York Mets":121,
+  "New York Yankees":147,"Oakland Athletics":133,"Philadelphia Phillies":143,
+  "Pittsburgh Pirates":134,"San Diego Padres":135,"San Francisco Giants":137,
+  "Seattle Mariners":136,"St. Louis Cardinals":138,"Tampa Bay Rays":139,
+  "Texas Rangers":140,"Toronto Blue Jays":141,"Washington Nationals":120,
+  "Athletics":133,
+};
+function logoUrl(name) { const id = TEAM_IDS[name]; return id ? `https://www.mlbstatic.com/team-logos/${id}.svg` : null; }
+function logoImg(name, size=38) {
+  const url = logoUrl(name);
+  if (!url) return `<div style="width:${size}px;height:${size}px"></div>`;
+  return `<img src="${url}" style="width:${size}px;height:${size}px;object-fit:contain;flex-shrink:0" onerror="this.style.opacity=0" alt="">`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PARK FACTORS
+══════════════════════════════════════════════════════════════════════ */
+const PARK_DISPLAY = {
+  "Colorado Rockies":      { label:"Hitter's Park", cls:"hitter", emoji:"🏔️" },
+  "Boston Red Sox":        { label:"Hitter's Park", cls:"hitter", emoji:"🏟️" },
+  "Cincinnati Reds":       { label:"Hitter's Park", cls:"hitter", emoji:"🏟️" },
+  "Philadelphia Phillies": { label:"Hitter's Park", cls:"hitter", emoji:"🏟️" },
+  "Texas Rangers":         { label:"Hitter's Park", cls:"hitter", emoji:"🏟️" },
+  "Chicago Cubs":          { label:"Hitter's Park", cls:"hitter", emoji:"🏟️" },
+  "San Diego Padres":      { label:"Pitcher's Park", cls:"pitcher", emoji:"🌬️" },
+  "San Francisco Giants":  { label:"Pitcher's Park", cls:"pitcher", emoji:"🌬️" },
+  "Miami Marlins":         { label:"Pitcher's Park", cls:"pitcher", emoji:"🌬️" },
+  "Seattle Mariners":      { label:"Pitcher's Park", cls:"pitcher", emoji:"🌬️" },
+  "Los Angeles Dodgers":   { label:"Pitcher's Park", cls:"pitcher", emoji:"🌬️" },
+  "St. Louis Cardinals":   { label:"Pitcher's Park", cls:"pitcher", emoji:"🌬️" },
+  "Tampa Bay Rays":        { label:"Pitcher's Park", cls:"pitcher", emoji:"🌬️" },
+};
+function getParkBadge(homeTeam) {
+  const p = PARK_DISPLAY[homeTeam];
+  if (!p) return '';
+  return `<span class="park-badge ${p.cls}">${p.emoji} ${p.label}</span>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   THEME
+══════════════════════════════════════════════════════════════════════ */
+let chartInst = null;
+function getTheme() { return localStorage.getItem('theme') || 'dark'; }
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  const icon = t === 'dark' ? '🌙' : '☀️';
+  ['theme-btn','theme-btn-nav'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = icon; });
+  localStorage.setItem('theme', t);
+  if (chartInst) {
+    chartInst.options.scales.x.ticks.color = t==='dark'?'#555':'#9ca3af';
+    chartInst.options.scales.y.ticks.color = t==='dark'?'#555':'#9ca3af';
+    chartInst.options.scales.x.grid.color  = t==='dark'?'#1a1a1a':'#e5e7eb';
+    chartInst.options.scales.y.grid.color  = t==='dark'?'#1a1a1a':'#e5e7eb';
+    chartInst.update();
+  }
+}
+function toggleTheme() { haptic(10); applyTheme(getTheme()==='dark'?'light':'dark'); }
+applyTheme(getTheme());
+
+/* ══════════════════════════════════════════════════════════════════════
+   NOTIFICATIONS
+══════════════════════════════════════════════════════════════════════ */
+function showToast(msg, duration=3500) {
+  const t = document.getElementById('notif-toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+const NOTIF_KEY = 'notifEnabled';
+function notifEnabled() { return localStorage.getItem(NOTIF_KEY) !== 'off'; }
+function setNotifEnabled(val) { localStorage.setItem(NOTIF_KEY, val ? 'on' : 'off'); }
+
+function updateNotifBtn() {
+  const supported = 'Notification' in window;
+  const granted   = supported && Notification.permission === 'granted';
+  const active    = granted && notifEnabled();
+  ['notif-btn','notif-btn-nav'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.textContent  = active ? '🔔' : '🔕';
+    btn.style.opacity = supported ? '1' : '0.35';
+    btn.title = !supported  ? 'Notifications not supported in this browser'
+              : !granted    ? 'Tap to enable pick notifications'
+              : active      ? 'Notifications on — tap to turn off'
+              :               'Notifications off — tap to turn on';
+  });
+}
+async function handleNotifBtn() {
+  haptic(10);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (!('Notification' in window)) {
+    showToast(isIOS
+      ? 'On iOS: Safari → Share → Add to Home Screen, then enable notifications'
+      : 'Notifications not supported in this browser', 5000);
+    return;
+  }
+  if (Notification.permission === 'denied') {
+    showToast('Notifications blocked — go to browser Settings → Site Settings to allow', 5000);
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    // Toggle on/off
+    const nowEnabled = !notifEnabled();
+    setNotifEnabled(nowEnabled);
+    updateNotifBtn();
+    if (nowEnabled) {
+      try { new Notification('⚾ MLB Picks Bot', { body: 'Notifications on! You\'ll be alerted when picks drop.', icon: '/static/icon-192.png' }); } catch(e){}
+      showToast('🔔 Notifications turned on');
+    } else {
+      showToast('🔕 Notifications turned off');
+    }
+    return;
+  }
+  // Not yet asked — request permission
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      setNotifEnabled(true);
+      updateNotifBtn();
+      try { new Notification('⚾ MLB Picks Bot', { body: 'Notifications on! You\'ll be alerted when picks drop.', icon: '/static/icon-192.png' }); } catch(e){}
+      showToast('🔔 Notifications enabled!');
+    } else {
+      showToast('Notifications declined');
+    }
+  } catch(e) {
+    showToast('Could not request notification permission');
+  }
+}
+function maybeNotify(picks) {
+  if (!picks.length) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (!notifEnabled()) return;
+  const today = localDate();
+  const key   = 'notifSentDate';
+  if (localStorage.getItem(key) === today) return;
+  localStorage.setItem(key, today);
+  const names = picks.map(p=>p.pick.split(' ').pop()).join(', ');
+  try { new Notification(`⚾ ${picks.length} Pick${picks.length>1?'s':''} Today!`, { body:names, icon:'/static/icon-192.png' }); } catch(e){}
+}
+updateNotifBtn();
+setTimeout(updateNotifBtn, 500);
+
+/* ══════════════════════════════════════════════════════════════════════
+   COUNTDOWN TIMERS
+══════════════════════════════════════════════════════════════════════ */
+function updateCountdowns() {
+  document.querySelectorAll('.countdown-el[data-gametime]').forEach(el => {
+    const gt   = new Date(el.dataset.gametime);
+    const diff = gt - Date.now();
+    if (diff <= 0) { el.textContent = '⏱️ Starting soon'; return; }
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    el.textContent = h > 0 ? `⏱️ ${h}h ${m}m` : `⏱️ ${m}m`;
+  });
+}
+setInterval(updateCountdowns, 30000);
+
+/* ══════════════════════════════════════════════════════════════════════
+   TAB LIVE BADGE
+══════════════════════════════════════════════════════════════════════ */
+function updateTodayTabBadge(games) {
+  const liveCount = (games||[]).filter(g => g.status?.abstractGameState==='Live').length;
+  const btn = document.querySelector('.tab-btn[data-tab="today"]');
+  if (!btn) return;
+  const existing = btn.querySelector('.tab-live-badge');
+  if (existing) existing.remove();
+  if (liveCount > 0) {
+    const badge = document.createElement('span');
+    badge.className = 'tab-live-badge';
+    badge.textContent = liveCount;
+    btn.appendChild(badge);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   GAME HELPERS
+══════════════════════════════════════════════════════════════════════ */
+function findGame(games, awayTeam, homeTeam) {
+  return (games||[]).find(g =>
+    g.teams?.away?.team?.name === awayTeam &&
+    g.teams?.home?.team?.name === homeTeam
+  );
+}
+
+function buildStatusChip(game) {
+  if (!game) return '';
+  const state  = game.status?.abstractGameState || '';
+  const inning = game.linescore?.currentInning;
+  const half   = game.linescore?.inningHalf;
+  if (state === 'Live') {
+    const halfIcon = half === 'Top' ? '▲' : '▼';
+    return `<span class="status-chip live">🔴 LIVE ${halfIcon}${inning||''}</span>`;
+  }
+  if (state === 'Final') return `<span class="status-chip final">🏁 Final</span>`;
+  // Pre-game — show countdown
+  const gd = game.gameDate;
+  if (!gd) return '';
+  return `<span class="countdown-el status-chip" data-gametime="${gd}">⏱️ …</span>`;
+}
+
+function buildLiveScoreBar(game) {
+  if (!game) return '';
+  const state = game.status?.abstractGameState;
+  if (state !== 'Live') return '';
+  const awayAbb = (game.teams?.away?.team?.name||'').split(' ').pop();
+  const homeAbb = (game.teams?.home?.team?.name||'').split(' ').pop();
+  const awayR   = game.linescore?.teams?.away?.runs ?? '–';
+  const homeR   = game.linescore?.teams?.home?.runs ?? '–';
+  const inning  = game.linescore?.currentInning || '';
+  const half    = game.linescore?.inningHalf || '';
+  const halfIcon= half==='Top'?'▲':'▼';
+  return `
+    <div class="live-score-bar">
+      <span class="lsb-status">🔴 ${halfIcon}${inning}</span>
+      <span class="lsb-score">${awayAbb} <strong>${awayR}</strong> – <strong>${homeR}</strong> ${homeAbb}</span>
+    </div>`;
+}
+
+function buildGameOverBanner(game, pickedTeam) {
+  if (!game) return '';
+  if (game.status?.abstractGameState !== 'Final') return '';
+  const awayName = game.teams?.away?.team?.name || '';
+  const homeName = game.teams?.home?.team?.name || '';
+  const awayR    = game.linescore?.teams?.away?.runs ?? 0;
+  const homeR    = game.linescore?.teams?.home?.runs ?? 0;
+  const awayAbb  = awayName.split(' ').pop();
+  const homeAbb  = homeName.split(' ').pop();
+  if (awayR === homeR) return `<div class="game-over-banner push">➖ FINAL: ${awayAbb} ${awayR} – ${homeR} ${homeAbb} · PUSH</div>`;
+  const winner = awayR > homeR ? awayName : homeName;
+  const won    = winner === pickedTeam;
+  return `<div class="game-over-banner ${won?'won':'lost'}">
+    ${won?'✅':'❌'} FINAL: ${awayAbb} ${awayR} – ${homeR} ${homeAbb} · ${won?'WIN':'LOSS'}
+  </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PICK REASONING
+══════════════════════════════════════════════════════════════════════ */
+function generateReasoning(p) {
+  const isAway      = p.pick === p.away_team;
+  const pickedTeam  = p.pick;
+  const oppTeam     = isAway ? p.home_team : p.away_team;
+  const pickedLast  = pickedTeam.split(' ').pop();
+  const oppLast     = oppTeam.split(' ').pop();
+  const pickedPitcher = isAway ? p.away_pitcher : p.home_pitcher;
+  const oppPitcher    = isAway ? p.home_pitcher : p.away_pitcher;
+  const pickedPLast   = (pickedPitcher||'TBD').split(' ').pop();
+  const oppPLast      = (oppPitcher   ||'TBD').split(' ').pop();
+  const pickedERA     = isAway ? p.away_era        : p.home_era;
+  const oppERA        = isAway ? p.home_era        : p.away_era;
+  const pickedL3      = isAway ? p.away_recent_era : p.home_recent_era;
+  const oppL3         = isAway ? p.home_recent_era : p.away_recent_era;
+  const edge    = p.margin || 0;
+  const winProb = Math.min(Math.round(50 + edge * 13), 90);
+
+  let edgeTierClass, edgeTierLabel;
+  if      (edge>=2.5){edgeTierClass='elite';    edgeTierLabel='🔥 ELITE EDGE';}
+  else if (edge>=2.0){edgeTierClass='elite';    edgeTierLabel='💪 VERY STRONG';}
+  else if (edge>=1.5){edgeTierClass='strong';   edgeTierLabel='✅ STRONG EDGE';}
+  else if (edge>=1.25){edgeTierClass='moderate';edgeTierLabel='📈 SOLID EDGE';}
+  else               {edgeTierClass='threshold';edgeTierLabel='⚡ QUALIFYING EDGE';}
+
+  let valueStr = '';
+  if (p.pick_odds) {
+    const o=p.pick_odds;
+    const impliedProb=o<0?Math.round((-o/(-o+100))*100):Math.round((100/(o+100))*100);
+    const diff=winProb-impliedProb;
+    valueStr=diff>0
+      ?`<div class="rd-line good">📊 <strong>Model finds +${diff}% value</strong> — win probability ${winProb}% vs market implied ${impliedProb}%</div>`
+      :`<div class="rd-line neutral">📊 Model win probability: <strong>${winProb}%</strong> · Market implied: <strong>${impliedProb}%</strong></div>`;
+  } else {
+    valueStr=`<div class="rd-line neutral">📊 Model win probability: <strong>${winProb}%</strong></div>`;
+  }
+
+  // ── Bot historical record at this edge tier ───────────────────────────────
+  const edgeFloor = edge>=2.0?2.0:edge>=1.5?1.5:edge>=1.25?1.25:1.0;
+  const tierLabel = edge>=2.0?'2.0+':edge>=1.5?'1.5–1.99':edge>=1.25?'1.25–1.49':'1.00–1.24';
+  const tierPicks = (typeof allPicks!=='undefined'?allPicks:[]).filter(pk=>{
+    const m=parseFloat(pk.margin||0);
+    const r=(pk.result||'').toUpperCase();
+    return m>=edgeFloor && (r==='W'||r==='L'||r==='P');
+  });
+  const tierW   = tierPicks.filter(pk=>pk.result.toUpperCase()==='W').length;
+  const tierL   = tierPicks.filter(pk=>pk.result.toUpperCase()==='L').length;
+  const tierWPct= (tierW+tierL)>0?Math.round(tierW/(tierW+tierL)*100):null;
+  const botRecordHtml = tierWPct!==null
+    ? `<div class="rd-bot-record">
+        <div class="rd-bot-record-badge">📈 ${tierW}-${tierL} (${tierWPct}%)</div>
+        <div class="rd-bot-record-text">Bot's record on edge ${tierLabel} picks this season</div>
+       </div>`
+    : '';
+
+  // ── Bet sizing recommendation ─────────────────────────────────────────────
+  const betUnits = edge>=2.5?'2.5 units':edge>=2.0?'2 units':edge>=1.5?'1.5 units':'1 unit';
+  const betNote  = edge>=2.5?'Maximum sizing — elite conviction':edge>=2.0?'Strong sizing — high conviction':edge>=1.5?'Confident sizing — solid edge':'Standard sizing — qualifying play';
+  const gaugeWidth = Math.min(Math.round((edge-1.0)/2.0*100),100);
+
+  const s1=`<div class="rd-section">
+    <div class="rd-section-title">🎯 Model Edge — The Decision</div>
+    <div class="rd-edge-hero">
+      <div class="rd-edge-hero-label">Edge Score</div>
+      <div class="rd-edge-score">${edge.toFixed(2)}</div>
+      <div class="rd-edge-tier ${edgeTierClass}">${edgeTierLabel}</div>
+      <div class="rd-gauge-wrap"><div class="rd-gauge-bar" style="width:${gaugeWidth}%"></div></div>
+      <div class="rd-edge-desc">Qualifying threshold: 1.00 &nbsp;·&nbsp; This pick scored <strong>${edge.toFixed(2)}</strong></div>
+    </div>
+    <div class="rd-line good">🧠 <strong>${pickedLast} ML</strong> selected — model probability exceeds market line by a measurable, qualifying edge</div>
+    ${valueStr}
+    <div class="rd-line ${edge>=1.5?'good':'neutral'}">📐 Edge <strong>${edge.toFixed(2)}</strong> — ${edge>=2.0?'high-conviction play, strong position sizing appropriate':edge>=1.5?'confident play, edge is well clear of threshold':'qualifying play — minimum edge requirement cleared, standard sizing'}</div>
+    ${botRecordHtml}
+    <div class="rd-bet-size">
+      <div><div class="rd-bet-size-label">Recommended Bet Size</div><div class="rd-bet-size-val">🎯 ${betUnits}</div></div>
+      <div class="rd-bet-size-note">${betNote}</div>
+    </div>
+  </div>`;
+
+  const pickedERAStr=pickedERA!=null?pickedERA.toFixed(2):'—';
+  const oppERAStr   =oppERA   !=null?oppERA.toFixed(2)   :'—';
+  const pickedWinsERA=pickedERA!=null&&oppERA!=null&&pickedERA<oppERA;
+  function l3Badge(l3,season){
+    if(l3==null)return '';
+    const cls=l3<(season||99)?'hot':l3>(season||0)+1?'cold':'flat';
+    return `<span class="rd-l3 ${cls}">L3: ${l3.toFixed(2)}</span>`;
+  }
+  let eraCompLine='';
+  if(pickedERA!=null&&oppERA!=null){
+    const diff=Math.abs(pickedERA-oppERA).toFixed(2);
+    if(pickedERA<oppERA) eraCompLine=`<div class="rd-line good">✅ <strong>${pickedPLast}</strong> holds the ERA edge — ${diff} lower than opposing starter</div>`;
+    else if(pickedERA>oppERA) eraCompLine=`<div class="rd-line warn">⚠️ <strong>${pickedPLast}</strong> ERA is ${diff} higher — pitching disadvantage noted, model edge overrides</div>`;
+    else eraCompLine=`<div class="rd-line neutral">ERA even between starters — model finds edge in team-level factors</div>`;
+  } else { eraCompLine=`<div class="rd-line neutral">Pitcher ERA data unavailable — model ran on available metrics</div>`; }
+  let l3Line='';
+  if(pickedL3!=null&&pickedERA!=null){
+    if(pickedL3<pickedERA) l3Line=`<div class="rd-line good">🔥 <strong>${pickedPLast}</strong> trending hot — last 3 starts ERA (${pickedL3.toFixed(2)}) below season average</div>`;
+    else if(pickedL3>pickedERA+1.5) l3Line=`<div class="rd-line warn">❄️ <strong>${pickedPLast}</strong> recent form is cold — L3 ERA (${pickedL3.toFixed(2)}) above season average by ${(pickedL3-pickedERA).toFixed(2)}</div>`;
+  }
+  const s2=`<div class="rd-section">
+    <div class="rd-section-title">⚾ Pitching Matchup — Supporting Evidence</div>
+    <div class="rd-pitcher-row">
+      <div class="rd-pitcher ${pickedWinsERA?'rd-win':''}">
+        <div class="rd-pitcher-team" style="color:var(--accent)">${pickedLast} ✅</div>
+        <div class="rd-pitcher-name">${pickedPLast}</div>
+        <div class="rd-era-big">${pickedERAStr}</div>
+        <div class="rd-era-lbl">Season ERA</div>
+        ${l3Badge(pickedL3,pickedERA)}
+      </div>
+      <div class="rd-vs">VS</div>
+      <div class="rd-pitcher ${!pickedWinsERA&&pickedERA!=null&&oppERA!=null?'rd-win':''}">
+        <div class="rd-pitcher-team" style="color:var(--muted)">${oppLast}</div>
+        <div class="rd-pitcher-name">${oppPLast}</div>
+        <div class="rd-era-big">${oppERAStr}</div>
+        <div class="rd-era-lbl">Season ERA</div>
+        ${l3Badge(oppL3,oppERA)}
+      </div>
+    </div>
+    ${eraCompLine}${l3Line}
+  </div>`;
+
+  const isPickHome=!isAway;
+  const s3=`<div class="rd-section">
+    <div class="rd-section-title">🏟️ Game Context — Supporting Evidence</div>
+    <div class="rd-line ${isPickHome?'good':'neutral'}">
+      ${isPickHome
+        ?`🏠 <strong>${pickedLast}</strong> playing at home — model factors in home field advantage`
+        :`✈️ <strong>${pickedLast}</strong> on the road — model accounts for travel and park factors`}
+    </div>
+    <div class="rd-line neutral">📍 Full head-to-head: <strong>${p.away_team.split(' ').pop()}</strong> @ <strong>${p.home_team.split(' ').pop()}</strong> — all factors weighted and scored</div>
+  </div>`;
+
+  let verdictText;
+  const recordCtx = tierWPct!==null?` The bot is <strong>${tierW}-${tierL} (${tierWPct}%)</strong> on similar edge plays this season.`:'';
+  if(edge>=2.0) verdictText=`The model carries <strong>very high conviction</strong> on <strong>${pickedLast} ML</strong>. An edge of ${edge.toFixed(2)} sits well above the qualifying threshold — this is among the strongest plays of the day. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
+  else if(edge>=1.5) verdictText=`<strong>${pickedLast} ML</strong> is a confident play. The edge of ${edge.toFixed(2)} clears the threshold comfortably, with the model's win probability outpacing market pricing. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
+  else verdictText=`<strong>${pickedLast} ML</strong> qualifies on model edge at ${edge.toFixed(2)}. The model detects value the market hasn't fully priced. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
+
+  return `${s1}${s2}${s3}<div class="rd-verdict"><div class="rd-verdict-title">📋 Verdict</div><div class="rd-verdict-text">${verdictText}</div></div>`;
+}
+
+function toggleReasoning(id) {
+  const btn=document.getElementById(`rb-${id}`);
+  const body=document.getElementById(`rd-${id}`);
+  if(!btn||!body)return;
+  const isOpen=body.classList.contains('open');
+  haptic(isOpen ? 6 : 12);
+  body.classList.toggle('open',!isOpen);
+  btn.classList.toggle('open',!isOpen);
+  btn.querySelector('.arrow').textContent=isOpen?'▾':'▴';
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   STATE & TABS
+══════════════════════════════════════════════════════════════════════ */
+let activeTab='today';
+const REFRESH=5*60*1000;
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab=btn.dataset.tab;
+    if(tab===activeTab)return;
+    haptic(8);
+    activeTab=tab;
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active','tab-anim'));
+    const newPanel=document.getElementById('panel-'+tab);
+    newPanel.classList.add('active');
+    newPanel.offsetHeight; // force reflow so animation re-triggers
+    newPanel.classList.add('tab-anim');
+    loadTab(tab);
+  });
+});
+
+async function fetchJSON(url){const r=await fetch(url);if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}
+function spinner(){return '<div class="spinner"></div>';}
+function setPanel(id,h){document.getElementById(id).innerHTML=h;}
+
+/* ══════════════════════════════════════════════════════════════════════
+   HAPTIC FEEDBACK (Android Chrome; silent no-op on iOS/desktop)
+══════════════════════════════════════════════════════════════════════ */
+function haptic(pattern=10){if(navigator.vibrate)navigator.vibrate(pattern);}
+
+/* ══════════════════════════════════════════════════════════════════════
+   ANIMATED COUNTERS
+══════════════════════════════════════════════════════════════════════ */
+function animateVal(el,target,decimals=0,prefix='',suffix=''){
+  if(!el)return;
+  const dur=900,t0=performance.now();
+  function step(now){
+    const p=Math.min((now-t0)/dur,1);
+    const e=1-Math.pow(1-p,3);
+    el.textContent=prefix+(target*e).toFixed(decimals)+suffix;
+    if(p<1)requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function animateEdgeBars(){document.querySelectorAll('.edge-fill[data-pct]').forEach(el=>{setTimeout(()=>{el.style.width=el.dataset.pct+'%';},100);});}
+function animatePctBars(){document.querySelectorAll('.pct-fill[data-pct]').forEach(el=>{setTimeout(()=>{el.style.width=el.dataset.pct+'%';},200);});}
+
+/* ══════════════════════════════════════════════════════════════════════
+   LIVE SCORE TICKER
+══════════════════════════════════════════════════════════════════════ */
+function localDate() {
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+async function loadLiveScores(myPicks) {
+  try {
+    const today=localDate();
+    const url=`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=linescore&gameType=R`;
+    const data=await fetch(url).then(r=>r.json());
+    const games=(data.dates||[]).flatMap(d=>d.games||[]);
+    if(!games.length)return{ticker:'',games:[]};
+
+    const pickedTeams=new Set((myPicks||[]).map(p=>p.pick));
+    const chips=games.map(g=>{
+      const away=g.teams?.away?.team?.name||'';
+      const home=g.teams?.home?.team?.name||'';
+      const awayR=g.linescore?.teams?.away?.runs??'—';
+      const homeR=g.linescore?.teams?.home?.runs??'—';
+      const state=g.status?.abstractGameState||'';
+      const inning=g.linescore?.currentInning;
+      const half=g.linescore?.inningHalf;
+      let statusStr='',statusCls='';
+      if(state==='Final'){statusStr='Final';}
+      else if(state==='Live'){statusStr=(half&&inning)?`${half==='Top'?'▲':'▼'}${inning}`:'Live';statusCls='live';}
+      else{try{const dt=new Date(g.gameDate);statusStr=dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}catch(e){statusStr='Soon';}}
+      const isPick=pickedTeams.has(away)||pickedTeams.has(home);
+      const showScore=state==='Final'||state==='Live';
+      const awayAbb=away.split(' ').pop();
+      const homeAbb=home.split(' ').pop();
+      const gamePk=g.gamePk||'';
+      const mlbUrl=gamePk?`https://www.mlb.com/gameday/${gamePk}`:'#';
+      return `<a class="score-chip${isPick?' is-pick':''}" href="${mlbUrl}" target="_blank" rel="noopener noreferrer">
+        <div class="score-chip-teams">
+          <div class="score-team">${logoImg(away,18)} ${awayAbb}</div>
+          ${showScore?`<span class="score-runs">${awayR}<span class="score-sep">-</span>${homeR}</span>`:`<span class="score-sep" style="font-size:12px">vs</span>`}
+          <div class="score-team">${homeAbb} ${logoImg(home,18)}</div>
+        </div>
+        <div class="score-status ${statusCls}">${statusStr}${isPick?' ⚾':''}</div>
+      </a>`;
+    }).join('');
+
+    const ticker=`<div class="ticker-wrap">
+      <div class="ticker-label"><span class="live-dot"></span>Today's Scores</div>
+      <div class="ticker-scroll">${chips}</div>
+    </div>`;
+    return{ticker,games};
+  } catch(e){return{ticker:'',games:[]};}
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   LINEUP WARNINGS
+══════════════════════════════════════════════════════════════════════ */
+const _topHitterCache={};
+async function _getTeamTopHitters(teamId,n=4){
+  if(_topHitterCache[teamId])return _topHitterCache[teamId];
+  try{
+    const yr=new Date().getFullYear();
+    const url=`https://statsapi.mlb.com/api/v1/teams/${teamId}/roster?rosterType=active&season=${yr}&hydrate=person(stats(group=hitting,type=season,season=${yr}))`;
+    const data=await fetch(url).then(r=>r.json());
+    const players=[];
+    for(const player of(data.roster||[])){
+      const pos=player.position?.abbreviation||'';
+      if(['SP','RP','P','TWP'].includes(pos))continue;
+      const person=player.person||{};
+      const name=person.fullName||'';
+      const pid=person.id;
+      for(const sg of(person.stats||[])){
+        if(sg.group?.displayName!=='hitting')continue;
+        for(const sp of(sg.splits||[])){
+          const s=sp.stat||{};
+          const ops=parseFloat(s.ops||0)||0;
+          const ab=parseInt(s.atBats||0)||0;
+          if(ab>=50)players.push({name,id:pid,ops});
         }
-        r = httpx.get(rest_url, headers=headers, timeout=10)
-        results["raw_http"] = {
-            "status":   r.status_code,
-            "url":      rest_url,
-            "response": r.text[:500],
+      }
+    }
+    players.sort((a,b)=>b.ops-a.ops);
+    const top=players.slice(0,n);
+    _topHitterCache[teamId]=top;
+    return top;
+  }catch(e){_topHitterCache[teamId]=[];return[];}
+}
+
+async function loadLineupWarnings(picks){
+  if(!picks||!picks.length)return{};
+  try{
+    const today=localDate();
+    const schedData=await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=lineups&gameType=R`).then(r=>r.json());
+    const gameLineups={};
+    for(const de of(schedData.dates||[])){
+      for(const g of(de.games||[])){
+        const lup=g.lineups;
+        if(!lup)continue;
+        const awayIds=new Set((lup.awayPlayers||[]).map(p=>p.id));
+        const homeIds=new Set((lup.homePlayers||[]).map(p=>p.id));
+        if(awayIds.size||homeIds.size){
+          gameLineups[g.gamePk]={away:awayIds,home:homeIds,awayTeamId:g.teams?.away?.team?.id,homeTeamId:g.teams?.home?.team?.id};
         }
-    except Exception as e:
-        results["raw_http"] = {"error": str(e)}
+      }
+    }
+    if(!Object.keys(gameLineups).length)return{};
+    const allGames=(schedData.dates||[]).flatMap(d=>d.games||[]);
+    const warnings={};
+    for(const p of picks){
+      const game=allGames.find(g=>g.teams?.away?.team?.name===p.away_team&&g.teams?.home?.team?.name===p.home_team);
+      if(!game)continue;
+      const lup=gameLineups[game.gamePk];
+      if(!lup)continue;
+      const pickKey=`${p.away_team}|${p.home_team}`;
+      const w=[];
+      const sides=[{name:p.away_team,id:lup.awayTeamId,confirmed:lup.away},{name:p.home_team,id:lup.homeTeamId,confirmed:lup.home}];
+      for(const side of sides){
+        if(!side.id)continue;
+        const topHitters=await _getTeamTopHitters(side.id);
+        for(const h of topHitters){
+          if(!side.confirmed.has(h.id)){w.push(`${side.name.split(' ').pop()}: ${h.name.split(' ').pop()} out`);}
+        }
+      }
+      if(w.length)warnings[pickKey]=w;
+    }
+    return warnings;
+  }catch(e){console.warn('Lineup warning fetch failed:',e);return{};}
+}
 
-    # Test 2: supabase-py client
-    try:
-        resp = supabase.table("picks").select("id").limit(1).execute()
-        results["supabase_client"] = {"ok": True, "rows": resp.data}
-    except Exception as e:
-        results["supabase_client"] = {"error": str(e)}
+/* ══════════════════════════════════════════════════════════════════════
+   EDGE RING
+══════════════════════════════════════════════════════════════════════ */
+function buildEdgeRing(edge) {
+  const pct = Math.min((edge / 3.0) * 100, 100);
+  const r = 22, cx = 30, cy = 30;
+  const circ = +(2 * Math.PI * r).toFixed(2);
+  const target = +(circ - (pct / 100) * circ).toFixed(2);
+  let tierCls;
+  if      (edge >= 2.0) tierCls = 'elite';
+  else if (edge >= 1.5) tierCls = 'strong';
+  else if (edge >= 1.25)tierCls = 'moderate';
+  else                  tierCls = 'threshold';
+  return `<div class="edge-ring-wrap">
+    <svg class="edge-ring-svg" width="60" height="60" viewBox="0 0 60 60">
+      <circle class="edge-ring-track" cx="${cx}" cy="${cy}" r="${r}"/>
+      <circle class="edge-ring-fill ${tierCls}" cx="${cx}" cy="${cy}" r="${r}"
+        stroke-dasharray="${circ}" stroke-dashoffset="${circ}"
+        data-target="${target}"
+        transform="rotate(-90 ${cx} ${cy})"/>
+    </svg>
+    <div class="edge-ring-center">
+      <div class="edge-ring-val">${edge.toFixed(2)}</div>
+      <div class="edge-ring-sub">EDGE</div>
+    </div>
+  </div>`;
+}
+function animateEdgeRings() {
+  document.querySelectorAll('.edge-ring-fill[data-target]').forEach(el => {
+    setTimeout(() => { el.style.strokeDashoffset = el.dataset.target; }, 150);
+  });
+}
 
-    return jsonify({
-        "url_prefix": url_safe,
-        "key_prefix": key_safe,
-        "results":    results,
-    })
+/* ══════════════════════════════════════════════════════════════════════
+   TODAY TAB
+══════════════════════════════════════════════════════════════════════ */
+async function loadToday(){
+  setPanel('panel-today',spinner());
+  try{
+    const [picks, recData]  = await Promise.all([fetchJSON('/api/today'), fetchJSON('/api/record')]);
+    const {ticker,games}    = await loadLiveScores(picks);
+    const lineupWarnings    = await loadLineupWarnings(picks);
+    updateTodayTabBadge(games);
+    setPanel('panel-today', renderToday(picks, ticker, lineupWarnings, games, recData));
+    animateEdgeBars();
+    animateEdgeRings();
+    updateCountdowns();
+    maybeNotify(picks);
+  }catch(e){
+    setPanel('panel-today',`<div class="empty"><p>Failed to load: ${e.message}</p></div>`);
+  }
+}
 
+function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null) {
+  const today=new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+  // Streak fire banner
+  let streakBanner='';
+  if(recData && recData.streak>=3 && recData.streak_type==='W'){
+    streakBanner=`<div class="streak-fire-banner">
+      <div class="streak-fire-emoji">🔥</div>
+      <div class="streak-fire-text">
+        <div class="streak-fire-title">${recData.streak}-Game Win Streak!</div>
+        <div class="streak-fire-sub">Bot is on 🔥 — riding hot right now</div>
+      </div>
+    </div>`;
+  }
+
+  if(!picks.length){
+    return `${ticker}${streakBanner}
+      <div style="text-align:center;padding:10px 4px 6px;font-size:13px;color:var(--muted)">${today}</div>
+      <div class="empty"><div class="big">⚾</div><p>No qualifying picks today</p></div>`;
+  }
+
+  const cards=picks.map((p,i)=>{
+    const oddsStr  =p.pick_odds?`<span class="odds-chip">${toDecimalOdds(p.pick_odds)}</span>`:'';
+    const marginStr=p.margin!=null?p.margin.toFixed(2):'—';
+    const edgePct  =Math.min((p.margin||0)/3.0*100,100).toFixed(1);
+    const edge     =p.margin||0;
+    const isElite  =edge>=2.0;
+    const isPotd   =i===0;
+    const reasoningHTML=generateReasoning(p);
+    const pickKey  =`${p.away_team}|${p.home_team}`;
+    const warns    =lineupWarnings[pickKey]||[];
+    const lineupWarnHTML=warns.length
+      ?`<div class="lineup-warn">🚨 <strong>KEY PLAYERS OUT:</strong> ${warns.join(' &nbsp;·&nbsp; ')}</div>`:'';
+
+    const game        =findGame(games,p.away_team,p.home_team);
+    const statusChip  =buildStatusChip(game);
+    const liveScoreBar=buildLiveScoreBar(game);
+    const gameOverBanner=buildGameOverBanner(game,p.pick);
+    const parkBadge   =getParkBadge(p.home_team);
+
+    const awayCity=p.away_team.split(' ').slice(0,-1).join(' ');
+    const awayName=p.away_team.split(' ').pop();
+    const homeCity=p.home_team.split(' ').slice(0,-1).join(' ');
+    const homeName=p.home_team.split(' ').pop();
+    const awayLast=(p.away_pitcher||'').split(' ').pop()||'—';
+    const homeLast=(p.home_pitcher||'').split(' ').pop()||'—';
+    const awayERA =p.away_era!=null?p.away_era.toFixed(2):'—';
+    const homeERA =p.home_era!=null?p.home_era.toFixed(2):'—';
+    const awayL3  =p.away_recent_era!=null?`<span class="era-l3"> · L3: ${p.away_recent_era.toFixed(2)}</span>`:'';
+    const homeL3  =p.home_recent_era!=null?`<span class="era-l3"> · L3: ${p.home_recent_era.toFixed(2)}</span>`:'';
+
+    return `
+      <div class="pick-card${isElite?' elite-glow':''}">
+        <div class="pick-card-accent"></div>
+        <div class="pick-card-body">
+
+          ${isPotd?`<div class="potd-crown">👑 Pick of the Day</div>`:''}
+          ${gameOverBanner}
+
+          <div class="matchup-logos">
+            <div class="team-block away">
+              ${logoImg(p.away_team)}
+              <div class="team-info">
+                <div class="team-city">${awayCity}</div>
+                <div class="team-name">${awayName}</div>
+              </div>
+            </div>
+            <div class="vs-badge">@</div>
+            <div class="team-block home">
+              <div class="team-info" style="text-align:right">
+                <div class="team-city">${homeCity}</div>
+                <div class="team-name">${homeName}</div>
+              </div>
+              ${logoImg(p.home_team)}
+            </div>
+          </div>
+
+          <div class="meta-row">
+            ${statusChip}
+            ${parkBadge}
+          </div>
+
+          ${liveScoreBar}
+
+          <div class="pick-winner-row">
+            <div class="pick-winner-line">✅ ${p.pick.split(' ').pop()} ML ${oddsStr}</div>
+            ${buildEdgeRing(edge)}
+          </div>
+
+          ${lineupWarnHTML}
+
+          <div class="era-section">
+            <div class="era-row">
+              <span class="era-name">📉 ${awayLast}</span>
+              <span><span class="era-val">${awayERA}</span> ERA${awayL3}</span>
+            </div>
+            <div class="era-row">
+              <span class="era-name">📈 ${homeLast}</span>
+              <span><span class="era-val">${homeERA}</span> ERA${homeL3}</span>
+            </div>
+          </div>
+
+          <button class="reasoning-toggle" id="rb-${i}" onclick="toggleReasoning(${i})">
+            <span>🧠 Why this pick?</span>
+            <span class="arrow">▾</span>
+          </button>
+          <div class="reasoning-body" id="rd-${i}">
+            ${reasoningHTML}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    ${ticker}
+    ${streakBanner}
+    <div style="text-align:center;padding:6px 4px 2px;font-size:13px;color:var(--muted)">${today}</div>
+    <div class="refresh-note">Auto-refreshes every 5 min</div>
+    ${cards}`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   RECORD TAB (UNCHANGED)
+══════════════════════════════════════════════════════════════════════ */
+async function loadRecord(){
+  setPanel('panel-record',spinner());
+  try{
+    const[rec,chartPts,allPicks]=await Promise.all([fetchJSON('/api/record'),fetchJSON('/api/chart'),fetchJSON('/api/picks')]);
+    setPanel('panel-record',renderRecord(rec,allPicks));
+    renderChart(chartPts);
+    animatePctBars();
+    animateVal(document.getElementById('anim-wins'),  rec.wins,  0);
+    animateVal(document.getElementById('anim-losses'),rec.losses,0);
+    animateVal(document.getElementById('anim-pushes'),rec.pushes,0);
+    animateVal(document.getElementById('anim-roi'),   Math.abs(rec.roi),1,rec.roi>=0?'+':'-','%');
+    animateVal(document.getElementById('anim-profit'),Math.abs(rec.profit),0,rec.profit>=0?'+$':'-$');
+  }catch(e){setPanel('panel-record',`<div class="empty"><p>Failed to load: ${e.message}</p></div>`);}
+}
+
+function getThisWeek(picks){
+  const now=new Date();
+  // Week starts Monday (getDay: 0=Sun,1=Mon...6=Sat). On Sunday treat as day 7 so Mon is still the start.
+  const day=now.getDay()===0?7:now.getDay();
+  const start=new Date(now);start.setDate(now.getDate()-(day-1));start.setHours(0,0,0,0);
+  let w=0,l=0,p=0;
+  for(const pick of picks){
+    if(!pick.date)continue;
+    if(new Date(pick.date+'T00:00:00')>=start){
+      const r=(pick.result||'').toUpperCase();
+      if(r==='W')w++;else if(r==='L')l++;else if(r==='P')p++;
+    }
+  }
+  return{w,l,p};
+}
+
+function renderRecord(r,allPicks){
+  const winColor   =r.win_pct>=52?'green':'red';
+  const profitColor=r.profit >=0 ?'green':'red';
+  const roiColor   =r.roi    >=0 ?'green':'red';
+  const winPctPct  =Math.min(r.win_pct,100).toFixed(1);
+  const week       =getThisWeek(allPicks);
+  const weekPct    =(week.w+week.l)>0?(week.w/(week.w+week.l)*100).toFixed(0)+'%':'—';
+  let streakHtml='';
+  if(r.streak>0&&r.streak_type){
+    const cls=r.streak_type==='W'?'streak-w':'streak-l';
+    const lbl=r.streak_type==='W'?`🔥 ${r.streak}-Game Win Streak`:`❄️ ${r.streak}-Game Losing Streak`;
+    streakHtml=`<div style="margin-top:10px"><span class="streak-badge ${cls}">${lbl}</span></div>`;
+  }
+  return `
+    <div class="record-hero">
+      <div class="wlp">
+        <div class="wlp-item win"><div class="wlp-num" id="anim-wins">${r.wins}</div><div class="wlp-lbl">Wins</div></div>
+        <div class="wlp-item loss"><div class="wlp-num" id="anim-losses">${r.losses}</div><div class="wlp-lbl">Losses</div></div>
+        <div class="wlp-item push"><div class="wlp-num" id="anim-pushes">${r.pushes}</div><div class="wlp-lbl">Pushes</div></div>
+      </div>
+      ${streakHtml}
+    </div>
+    <div class="win-pct-bar-wrap">
+      <div class="win-pct-header">
+        <span class="win-pct-title">Win Rate</span>
+        <span class="win-pct-val ${winColor}">${r.win_pct}%</span>
+      </div>
+      <div class="pct-bar"><div class="pct-fill ${winColor}" data-pct="${winPctPct}"></div></div>
+      <div class="pct-markers"><span>0%</span><span style="color:var(--accent);font-weight:700">Break-even: 52.4%</span><span>100%</span></div>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-box ${r.roi>=0?'positive':'negative'}"><div class="stat-val ${roiColor}" id="anim-roi">${r.roi>=0?'+':''}${r.roi}%</div><div class="stat-lbl">ROI</div></div>
+      <div class="stat-box ${r.profit>=0?'positive':'negative'}"><div class="stat-val ${profitColor}" id="anim-profit">${r.profit>=0?'+':'-'}$${Math.abs(r.profit)}</div><div class="stat-lbl">Profit (units)</div></div>
+    </div>
+    <div class="week-box">
+      <h3>📅 This Week</h3>
+      <div class="week-record">
+        <div class="week-item w"><div class="week-num">${week.w}</div><div class="week-lbl">Wins</div></div>
+        <div class="week-item l"><div class="week-num">${week.l}</div><div class="week-lbl">Losses</div></div>
+        <div class="week-item p"><div class="week-num">${week.p}</div><div class="week-lbl">Pushes</div></div>
+        <div class="week-item" style="background:var(--surface2)"><div class="week-num" style="color:var(--text)">${weekPct}</div><div class="week-lbl">Win %</div></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Cumulative Profit</h3>
+      <div class="chart-wrap"><canvas id="profit-chart"></canvas></div>
+    </div>`;
+}
+
+function renderChart(points){
+  const ctx=document.getElementById('profit-chart');
+  if(!ctx)return;
+  if(chartInst){chartInst.destroy();chartInst=null;}
+  if(!points.length){ctx.parentElement.innerHTML='<div class="empty" style="padding:20px"><p>No completed picks yet</p></div>';return;}
+  const theme=getTheme();
+  const labels=points.map(p=>{const d=new Date(p.date+'T00:00:00');return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});});
+  const data=points.map(p=>p.profit);
+  const last=data[data.length-1]??0;
+  const color=last>=0?'#00e676':'#ff4444';
+  const gridC=theme==='dark'?'#1a1a1a':'#e5e7eb';
+  const tickC=theme==='dark'?'#555':'#9ca3af';
+  const gradient=ctx.getContext('2d').createLinearGradient(0,0,0,ctx.offsetHeight||180);
+  if(last>=0){gradient.addColorStop(0,'rgba(0,230,118,0.22)');gradient.addColorStop(1,'rgba(0,230,118,0.01)');}
+  else{gradient.addColorStop(0,'rgba(255,68,68,0.18)');gradient.addColorStop(1,'rgba(255,68,68,0.01)');}
+  chartInst=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets:[{data,borderColor:color,backgroundColor:gradient,borderWidth:2,pointRadius:0,pointHoverRadius:5,fill:true,tension:0.4}]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},animation:{duration:1000,easing:'easeOutQuart'},plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e1e1e',borderColor:'#333',borderWidth:1,titleColor:'#aaa',bodyColor:color,padding:10,callbacks:{label:ctx=>` ${ctx.raw>=0?'+':''}$${ctx.raw.toFixed(0)}`}}},scales:{x:{ticks:{color:tickC,font:{size:10},maxTicksLimit:6},grid:{color:gridC}},y:{ticks:{color:tickC,font:{size:10},callback:v=>(v>=0?'+':'')+'$'+v},grid:{color:gridC}}}}
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   HISTORY TAB
+══════════════════════════════════════════════════════════════════════ */
+async function loadHistory(){
+  setPanel('panel-history',spinner());
+  try{const picks=await fetchJSON('/api/picks');setPanel('panel-history',renderHistory(picks));}
+  catch(e){setPanel('panel-history',`<div class="empty"><p>Failed to load: ${e.message}</p></div>`);}
+}
+
+function renderHistory(picks){
+  if(!picks.length)return`<div class="empty"><div class="big">📜</div><p>No pick history yet</p></div>`;
+  const rows=picks.map(p=>{
+    const r=(p.result||'').toUpperCase();
+    const pillCls=r==='W'?'win':r==='L'?'loss':'push';
+    const pillLabel=r==='W'?'W':r==='L'?'L':r==='P'?'P':'—';
+    const resultCell=r?`<span class="result-pill ${pillCls}">${pillLabel}</span>`:'<span style="color:var(--muted)">—</span>';
+    const margin=p.margin!=null?p.margin.toFixed(2):'—';
+    const odds=toDecimalOdds(p.pick_odds)||'—';
+    const lA=logoUrl(p.away_team),lH=logoUrl(p.home_team);
+    const imgA=lA?`<img src="${lA}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`:'';
+    const imgH=lH?`<img src="${lH}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`:'';
+    return`<tr><td>${formatDate(p.date)}</td><td>${imgA}${abbrev(p.away_team)} @ ${imgH}${abbrev(p.home_team)}</td><td>${abbrev(p.pick)}</td><td>${odds}</td><td>${margin}</td><td>${resultCell}</td></tr>`;
+  }).join('');
+  return`<div class="hist-table-wrap"><table><thead><tr><th>Date</th><th>Matchup</th><th>Pick</th><th>Odds</th><th>Edge</th><th>Result</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════════════════════ */
+function toDecimalOdds(s){if(!s)return'';const v=parseFloat(s);if(isNaN(v))return s;if(v<=-100)return(1+100/Math.abs(v)).toFixed(2);if(v>=100)return(1+v/100).toFixed(2);return v.toFixed(2);}
+function formatDate(d){if(!d)return'—';return new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});}
+function abbrev(name){if(!name)return'—';const p=name.split(' ');return p.length>=2?p[p.length-1]:name;}
+
+/* ══════════════════════════════════════════════════════════════════════
+   LOAD & REFRESH
+══════════════════════════════════════════════════════════════════════ */
+function loadTab(tab){if(tab==='today')loadToday();if(tab==='record')loadRecord();if(tab==='history')loadHistory();}
+
+function refreshAll(){
+  loadTab(activeTab);
+  const now=new Date();
+  document.getElementById('last-refresh').textContent=now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+}
+
+refreshAll();
+setInterval(refreshAll,REFRESH);
+
+if('serviceWorker' in navigator){navigator.serviceWorker.register('/static/sw.js').catch(()=>{});}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PULL TO REFRESH
+══════════════════════════════════════════════════════════════════════ */
+(function(){
+  const content = document.querySelector('.content');
+  const wrap    = document.getElementById('ptr-wrap');
+  const icon    = document.getElementById('ptr-icon');
+  if (!content || !wrap) return;
+  let startY = 0, dragging = false, triggered = false;
+  const THRESHOLD = 65;
+
+  content.addEventListener('touchstart', e => {
+    if (content.scrollTop > 0) return;
+    startY   = e.touches[0].clientY;
+    dragging = true;
+    triggered = false;
+    wrap.classList.remove('releasing','loading');
+    wrap.style.transition = 'none';
+  }, { passive: true });
+
+  content.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const dist = Math.max(0, e.touches[0].clientY - startY);
+    if (dist <= 0) return;
+    const pull = Math.min(dist * 0.45, THRESHOLD);
+    wrap.style.transform = `translateX(-50%) translateY(${pull - 30}px)`;
+    wrap.style.opacity   = Math.min(pull / THRESHOLD, 1);
+    icon.style.transform = `rotate(${Math.min(pull / THRESHOLD * 180, 180)}deg)`;
+    triggered = dist > THRESHOLD;
+  }, { passive: true });
+
+  content.addEventListener('touchend', () => {
+    if (!dragging) return;
+    dragging = false;
+    wrap.classList.add('releasing');
+    if (triggered) {
+      wrap.classList.add('loading');
+      icon.textContent = '⟳';
+      icon.classList.add('spin');
+      haptic([10, 50, 10]);
+      refreshAll();
+      setTimeout(() => {
+        wrap.classList.remove('loading');
+        wrap.style.opacity = '0';
+        icon.textContent = '↓';
+        icon.classList.remove('spin');
+        icon.style.transform = '';
+      }, 1200);
+    } else {
+      wrap.style.opacity = '0';
+      icon.style.transform = '';
+    }
+    startY = 0;
+  }, { passive: true });
+})();
+
+/* ══════════════════════════════════════════════════════════════════════
+   ADD TO HOME SCREEN BANNER (iOS only, non-PWA)
+══════════════════════════════════════════════════════════════════════ */
+(function(){
+  const isIOS       = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isStandalone= window.navigator.standalone === true;
+  const dismissed   = localStorage.getItem('a2hsDismissed');
+  if (!isIOS || isStandalone || dismissed) return;
+
+  // Show after a short delay so page has settled
+  setTimeout(() => {
+    const banner = document.createElement('div');
+    banner.id = 'a2hs-banner';
+    banner.innerHTML = `
+      <div class="a2hs-inner">
+        <div class="a2hs-icon-wrap">⚾</div>
+        <div class="a2hs-text">
+          <div class="a2hs-title">Add MLB Picks to Home Screen</div>
+          <div class="a2hs-sub">Get push notifications when picks drop daily at 11:30am</div>
+        </div>
+        <button class="a2hs-close" onclick="dismissA2HS()">✕</button>
+      </div>
+      <div class="a2hs-arrow">Tap <span class="share-icon">Share</span> then "Add to Home Screen"</div>`;
+    document.body.appendChild(banner);
+    requestAnimationFrame(() => requestAnimationFrame(() => banner.classList.add('show')));
+  }, 2500);
+})();
+
+function dismissA2HS() {
+  haptic(8);
+  localStorage.setItem('a2hsDismissed', '1');
+  const banner = document.getElementById('a2hs-banner');
+  if (banner) {
+    banner.classList.remove('show');
+    setTimeout(() => banner.remove(), 350);
+  }
+}
+</script>
+</body>
+</html>
