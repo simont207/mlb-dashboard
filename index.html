@@ -382,6 +382,15 @@
     .rd-edge-tier.strong   { background: rgba(0,230,118,0.15); color: var(--win); }
     .rd-edge-tier.moderate { background: rgba(255,180,0,0.15); color: #ffb400; }
     .rd-edge-tier.threshold { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    .rd-gauge-wrap { margin: 10px 0 4px; background: var(--surface2); border-radius: 99px; height: 7px; overflow: hidden; }
+    .rd-gauge-bar  { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent2), var(--accent)); transition: width 1s cubic-bezier(0.4,0,0.2,1); }
+    .rd-bot-record { display:flex; align-items:center; gap:8px; background:var(--surface2); border-radius:10px; padding:8px 12px; margin-top:6px; }
+    .rd-bot-record-badge { font-size:11px; font-weight:800; color:var(--accent); white-space:nowrap; }
+    .rd-bot-record-text  { font-size:11px; color:var(--muted); line-height:1.4; }
+    .rd-bet-size { display:flex; align-items:center; justify-content:space-between; background:rgba(0,230,118,0.07); border:1px solid rgba(0,230,118,0.2); border-radius:10px; padding:9px 12px; margin-top:8px; }
+    .rd-bet-size-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
+    .rd-bet-size-val { font-size:15px; font-weight:900; color:var(--accent); }
+    .rd-bet-size-note { font-size:10px; color:var(--muted); text-align:right; }
 
     /* ── Record tab (UNCHANGED) ── */
     .record-hero {
@@ -946,17 +955,46 @@ function generateReasoning(p) {
     valueStr=`<div class="rd-line neutral">📊 Model win probability: <strong>${winProb}%</strong></div>`;
   }
 
+  // ── Bot historical record at this edge tier ───────────────────────────────
+  const edgeFloor = edge>=2.0?2.0:edge>=1.5?1.5:edge>=1.25?1.25:1.0;
+  const tierLabel = edge>=2.0?'2.0+':edge>=1.5?'1.5–1.99':edge>=1.25?'1.25–1.49':'1.00–1.24';
+  const tierPicks = (typeof allPicks!=='undefined'?allPicks:[]).filter(pk=>{
+    const m=parseFloat(pk.margin||0);
+    const r=(pk.result||'').toUpperCase();
+    return m>=edgeFloor && (r==='W'||r==='L'||r==='P');
+  });
+  const tierW   = tierPicks.filter(pk=>pk.result.toUpperCase()==='W').length;
+  const tierL   = tierPicks.filter(pk=>pk.result.toUpperCase()==='L').length;
+  const tierWPct= (tierW+tierL)>0?Math.round(tierW/(tierW+tierL)*100):null;
+  const botRecordHtml = tierWPct!==null
+    ? `<div class="rd-bot-record">
+        <div class="rd-bot-record-badge">📈 ${tierW}-${tierL} (${tierWPct}%)</div>
+        <div class="rd-bot-record-text">Bot's record on edge ${tierLabel} picks this season</div>
+       </div>`
+    : '';
+
+  // ── Bet sizing recommendation ─────────────────────────────────────────────
+  const betUnits = edge>=2.5?'2.5 units':edge>=2.0?'2 units':edge>=1.5?'1.5 units':'1 unit';
+  const betNote  = edge>=2.5?'Maximum sizing — elite conviction':edge>=2.0?'Strong sizing — high conviction':edge>=1.5?'Confident sizing — solid edge':'Standard sizing — qualifying play';
+  const gaugeWidth = Math.min(Math.round((edge-1.0)/2.0*100),100);
+
   const s1=`<div class="rd-section">
     <div class="rd-section-title">🎯 Model Edge — The Decision</div>
     <div class="rd-edge-hero">
       <div class="rd-edge-hero-label">Edge Score</div>
       <div class="rd-edge-score">${edge.toFixed(2)}</div>
       <div class="rd-edge-tier ${edgeTierClass}">${edgeTierLabel}</div>
+      <div class="rd-gauge-wrap"><div class="rd-gauge-bar" style="width:${gaugeWidth}%"></div></div>
       <div class="rd-edge-desc">Qualifying threshold: 1.00 &nbsp;·&nbsp; This pick scored <strong>${edge.toFixed(2)}</strong></div>
     </div>
     <div class="rd-line good">🧠 <strong>${pickedLast} ML</strong> selected — model probability exceeds market line by a measurable, qualifying edge</div>
     ${valueStr}
     <div class="rd-line ${edge>=1.5?'good':'neutral'}">📐 Edge <strong>${edge.toFixed(2)}</strong> — ${edge>=2.0?'high-conviction play, strong position sizing appropriate':edge>=1.5?'confident play, edge is well clear of threshold':'qualifying play — minimum edge requirement cleared, standard sizing'}</div>
+    ${botRecordHtml}
+    <div class="rd-bet-size">
+      <div><div class="rd-bet-size-label">Recommended Bet Size</div><div class="rd-bet-size-val">🎯 ${betUnits}</div></div>
+      <div class="rd-bet-size-note">${betNote}</div>
+    </div>
   </div>`;
 
   const pickedERAStr=pickedERA!=null?pickedERA.toFixed(2):'—';
@@ -1013,9 +1051,10 @@ function generateReasoning(p) {
   </div>`;
 
   let verdictText;
-  if(edge>=2.0) verdictText=`The model carries <strong>very high conviction</strong> on <strong>${pickedLast} ML</strong>. An edge of ${edge.toFixed(2)} sits well above the qualifying threshold — this is among the strongest plays of the day.`;
-  else if(edge>=1.5) verdictText=`<strong>${pickedLast} ML</strong> is a confident play. The edge of ${edge.toFixed(2)} clears the threshold comfortably, with the model's win probability consistently outpacing what the market is pricing in.`;
-  else verdictText=`<strong>${pickedLast} ML</strong> qualifies on model edge at ${edge.toFixed(2)}. This is a threshold play — the model detects value the market hasn't fully priced. Standard position sizing recommended.`;
+  const recordCtx = tierWPct!==null?` The bot is <strong>${tierW}-${tierL} (${tierWPct}%)</strong> on similar edge plays this season.`:'';
+  if(edge>=2.0) verdictText=`The model carries <strong>very high conviction</strong> on <strong>${pickedLast} ML</strong>. An edge of ${edge.toFixed(2)} sits well above the qualifying threshold — this is among the strongest plays of the day. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
+  else if(edge>=1.5) verdictText=`<strong>${pickedLast} ML</strong> is a confident play. The edge of ${edge.toFixed(2)} clears the threshold comfortably, with the model's win probability outpacing market pricing. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
+  else verdictText=`<strong>${pickedLast} ML</strong> qualifies on model edge at ${edge.toFixed(2)}. The model detects value the market hasn't fully priced. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
 
   return `${s1}${s2}${s3}<div class="rd-verdict"><div class="rd-verdict-title">📋 Verdict</div><div class="rd-verdict-text">${verdictText}</div></div>`;
 }
