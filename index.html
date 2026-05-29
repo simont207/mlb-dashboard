@@ -742,7 +742,7 @@
     if (stored && stored.code) {
       if (!stored.expires_at || new Date(stored.expires_at) > new Date()) {
         hasAccess = true;
-        _startHeartbeat(stored.code);
+        _startHeartbeat(stored.code, stored.user_id || null);
         // Show admin button only for permanent passes (no expiry = admin)
         if (!stored.expires_at) {
           document.addEventListener('DOMContentLoaded', () => {
@@ -773,10 +773,10 @@
   }
 })();
 
-function _startHeartbeat(code) {
+function _startHeartbeat(code, user_id) {
   const ping = () => fetch('/api/access/heartbeat', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({code})
+    body: JSON.stringify({code, user_id})
   }).then(r=>r.json()).then(d=>{
     if (d.expired) { localStorage.removeItem('mlb_access'); location.reload(); }
   }).catch(()=>{});
@@ -805,13 +805,13 @@ async function submitGate() {
 
     if (d.valid) {
       localStorage.setItem('mlb_access', JSON.stringify({
-        code: d.code, name: d.name, expires_at: d.expires_at
+        code: d.code, name: d.name, expires_at: d.expires_at, user_id: d.user_id || null
       }));
       const gate = document.getElementById('access-gate');
       gate.style.transition = 'opacity 0.3s';
       gate.style.opacity = '0';
       setTimeout(() => gate.style.display = 'none', 300);
-      _startHeartbeat(d.code);
+      _startHeartbeat(d.code, d.user_id || null);
       if (!d.expires_at) {
         const btn = document.getElementById('admin-btn');
         if (btn) btn.style.display = '';
