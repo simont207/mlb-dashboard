@@ -172,6 +172,18 @@ def api_access_generate():
     return jsonify({"ok": True, "code": code, "link": link, "expires_at": expires, "multi_use": multi})
 
 
+@app.route("/api/access/delete", methods=["POST"])
+@require_api_secret
+def api_access_delete():
+    data = request.get_json(force=True, silent=True) or {}
+    code = (data.get("code") or "").strip().upper()
+    if not code:
+        return jsonify({"ok": False, "error": "No code"}), 400
+    supabase.table("access_users").delete().eq("code", code).execute()
+    supabase.table("access_codes").delete().eq("code", code).execute()
+    return jsonify({"ok": True})
+
+
 @app.route("/api/access/codes", methods=["GET"])
 @require_api_secret
 def api_access_codes():
