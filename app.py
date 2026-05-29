@@ -94,31 +94,42 @@ def api_access_validate():
     if not rows:
         return jsonify({"valid": False, "error": "Invalid access code"}), 403
 
-    row  = rows[0]
-    now  = datetime.now(timezone.utc)
+    row = rows[0]
+    now = datetime.now(timezone.utc)
 
     if row.get("expires_at"):
         exp = datetime.fromisoformat(row["expires_at"].replace("Z", "+00:00"))
         if now > exp:
             return jsonify({"valid": False, "error": "This pass has expired"}), 403
 
-    update = {"last_seen": now.isoformat()}
-    if name:
-        update["name"] = name
-    supabase.table("access_codes").update(update).eq("code", code).execute()
+    user_id = None
+    if row.get("multi_use"):
+        # Multi-use: create a new user entry each time
+        u = supabase.table("access_users").insert({
+            "code": code, "name": name, "last_seen": now.isoformat()
+        }).execute()
+        user_id = u.data[0]["id"] if u.data else None
+    else:
+        update = {"last_seen": now.isoformat()}
+        if name:
+            update["name"] = name
+        supabase.table("access_codes").update(update).eq("code", code).execute()
 
     return jsonify({
         "valid":      True,
         "code":       code,
         "name":       name or row.get("name", ""),
         "expires_at": row.get("expires_at"),
+        "user_id":    user_id,
+        "multi_use":  row.get("multi_use", False),
     })
 
 
 @app.route("/api/access/heartbeat", methods=["POST"])
 def api_access_heartbeat():
-    data = request.get_json(force=True, silent=True) or {}
-    code = (data.get("code") or "").strip().upper()
+    data    = request.get_json(force=True, silent=True) or {}
+    code    = (data.get("code") or "").strip().upper()
+    user_id = data.get("user_id")
     if not code:
         return jsonify({"ok": False}), 400
 
@@ -134,7 +145,11 @@ def api_access_heartbeat():
         if now > exp:
             return jsonify({"ok": False, "expired": True}), 403
 
-    supabase.table("access_codes").update({"last_seen": now.isoformat()}).eq("code", code).execute()
+    if user_id:
+        supabase.table("access_users").update({"last_seen": now.isoformat()}).eq("id", user_id).execute()
+    else:
+        supabase.table("access_codes").update({"last_seen": now.isoformat()}).eq("code", code).execute()
+
     return jsonify({"ok": True})
 
 
@@ -143,40 +158,63 @@ def api_access_heartbeat():
 def api_access_generate():
     data      = request.get_json(force=True, silent=True) or {}
     permanent = data.get("permanent", False)
+    multi     = data.get("multi_use", False)
     code      = _gen_code()
     now       = datetime.now(timezone.utc)
     expires   = None if permanent else (now + timedelta(days=7)).isoformat()
 
-    supabase.table("access_codes").insert({"code": code, "expires_at": expires}).execute()
+    supabase.table("access_codes").insert({
+        "code": code, "expires_at": expires, "multi_use": multi
+    }).execute()
 
     base = request.host_url.rstrip('/')
     link = f"{base}/?code={code}"
-    return jsonify({"ok": True, "code": code, "link": link, "expires_at": expires})
+    return jsonify({"ok": True, "code": code, "link": link, "expires_at": expires, "multi_use": multi})
 
 
 @app.route("/api/access/codes", methods=["GET"])
 @require_api_secret
 def api_access_codes():
-    resp = supabase.table("access_codes").select("*").order("created_at", desc=True).execute()
-    rows = resp.data or []
-    now  = datetime.now(timezone.utc)
+    resp  = supabase.table("access_codes").select("*").order("created_at", desc=True).execute()
+    codes = resp.data or []
+    uresp = supabase.table("access_users").select("*").order("joined_at").execute()
+    users = uresp.data or []
+    now   = datetime.now(timezone.utc)
 
-    for row in rows:
+    result = []
+    for row in codes:
         if row.get("expires_at"):
             exp = datetime.fromisoformat(row["expires_at"].replace("Z", "+00:00"))
             row["expired"]   = now > exp
             row["days_left"] = max(0, (exp - now).days)
         else:
             row["expired"]   = False
-            row["days_left"] = None   # permanent
+            row["days_left"] = None
 
-        if row.get("last_seen"):
-            ls = datetime.fromisoformat(row["last_seen"].replace("Z", "+00:00"))
-            row["online"] = (now - ls).total_seconds() < 600
+        if row.get("multi_use"):
+            code_users = [u for u in users if u["code"] == row["code"]]
+            for u in code_users:
+                if u.get("last_seen"):
+                    ls = datetime.fromisoformat(u["last_seen"].replace("Z", "+00:00"))
+                    u["online"] = (now - ls).total_seconds() < 600
+                else:
+                    u["online"] = False
+            row["users"]        = code_users
+            row["user_count"]   = len(code_users)
+            row["online_count"] = sum(1 for u in code_users if u.get("online"))
+            row["online"]       = row["online_count"] > 0
         else:
-            row["online"] = False
+            row["users"]        = []
+            row["user_count"]   = 1 if row.get("name") else 0
+            if row.get("last_seen"):
+                ls = datetime.fromisoformat(row["last_seen"].replace("Z", "+00:00"))
+                row["online"] = (now - ls).total_seconds() < 600
+            else:
+                row["online"] = False
 
-    return jsonify(rows)
+        result.append(row)
+
+    return jsonify(result)
 
 
 # ── Odds helper ──────────────────────────────────────────────────────────────────
