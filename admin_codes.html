@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MLB Picks — Access Passes</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0a0a0a;color:#f0f0f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;min-height:100vh;padding:24px 16px 48px}
+  .wrap{max-width:700px;margin:0 auto}
+  h1{font-size:20px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+  .sub{color:#666;font-size:13px;margin-bottom:24px}
+
+  /* Stats row */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
+  .stat{background:#141414;border:1px solid #222;border-radius:14px;padding:14px;text-align:center}
+  .stat-num{font-size:28px;font-weight:800;line-height:1}
+  .stat-lbl{font-size:11px;color:#666;margin-top:4px;text-transform:uppercase;letter-spacing:0.5px}
+  .stat-num.green{color:#00e676}
+  .stat-num.yellow{color:#ffd600}
+  .stat-num.red{color:#ff4444}
+
+  /* Buttons */
+  .btn-row{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap}
+  .btn{padding:11px 20px;border-radius:10px;border:none;font-size:14px;font-weight:700;cursor:pointer;transition:opacity .15s}
+  .btn:active{opacity:.8}
+  .btn-green{background:#00e676;color:#000}
+  .btn-outline{background:transparent;color:#00e676;border:1px solid #00e676}
+
+  /* Link box */
+  #link-box{display:none;background:#141414;border:1px solid #252525;border-radius:14px;padding:16px;margin-bottom:20px}
+  .link-label{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+  .link-wrap{display:flex;gap:8px;align-items:center}
+  .link-text{flex:1;background:#0a0a0a;border:1px solid #252525;border-radius:8px;padding:10px 12px;font-size:13px;color:#00e676;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .copy-btn{background:#252525;color:#f0f0f0;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0}
+  .copy-btn.copied{background:#00e676;color:#000}
+
+  /* Table */
+  .table-wrap{overflow-x:auto;border-radius:14px;border:1px solid #1e1e1e}
+  table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+  thead th{background:#141414;color:#555;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.5px;padding:10px 12px;text-align:left;border-bottom:1px solid #1e1e1e}
+  tbody tr{border-bottom:1px solid #1a1a1a}
+  tbody tr:last-child{border-bottom:none}
+  tbody td{padding:11px 12px;background:#0f0f0f;color:#f0f0f0}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0}
+  .dot.online{background:#00e676;box-shadow:0 0 6px #00e676}
+  .dot.offline{background:#333}
+  .dot.expired{background:#ff4444}
+  .pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:700}
+  .pill.active{background:rgba(0,230,118,.15);color:#00e676}
+  .pill.expired{background:rgba(255,68,68,.12);color:#ff4444}
+  .pill.permanent{background:rgba(255,214,0,.1);color:#ffd600}
+  .empty{padding:40px;text-align:center;color:#444}
+  .code-mono{font-family:monospace;letter-spacing:2px;color:#aaa}
+  .refresh{font-size:11px;color:#444;margin-top:12px;text-align:right}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚾ Access Passes</h1>
+  <div class="sub">Manage who has access to MLB Picks Bot · auto-refreshes every 30s</div>
+
+  <div class="stats" id="stats">
+    <div class="stat"><div class="stat-num" id="s-total">—</div><div class="stat-lbl">Total Users</div></div>
+    <div class="stat"><div class="stat-num green" id="s-online">—</div><div class="stat-lbl">Online Now</div></div>
+    <div class="stat"><div class="stat-num yellow" id="s-active">—</div><div class="stat-lbl">Active Passes</div></div>
+    <div class="stat"><div class="stat-num red" id="s-expired">—</div><div class="stat-lbl">Expired</div></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-green" onclick="generatePass(false)">+ Generate 7-Day Pass</button>
+    <button class="btn btn-outline" onclick="generatePass(true)">+ Permanent Pass</button>
+  </div>
+
+  <div id="link-box">
+    <div class="link-label">Share this link — it pre-fills the code automatically</div>
+    <div class="link-wrap">
+      <div class="link-text" id="link-text"></div>
+      <button class="copy-btn" id="copy-btn" onclick="copyLink()">Copy</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Name</th>
+          <th>Code</th>
+          <th>Pass</th>
+          <th>Joined</th>
+          <th>Expires</th>
+          <th>Last Seen</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="7" class="empty">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="refresh" id="refresh-lbl"></div>
+</div>
+
+<script>
+const secret = new URLSearchParams(location.search).get('secret') || '';
+
+function fmt(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
+}
+function fmtTime(iso) {
+  if (!iso) return 'Never';
+  const d = new Date(iso);
+  const diff = Math.floor((Date.now() - d) / 1000);
+  if (diff < 60)  return 'Just now';
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  return fmt(iso);
+}
+
+async function load() {
+  try {
+    const r = await fetch(`/api/access/codes?secret=${secret}`);
+    const rows = await r.json();
+
+    // Stats
+    const total   = rows.length;
+    const online  = rows.filter(r => r.online && !r.expired).length;
+    const active  = rows.filter(r => !r.expired).length;
+    const expired = rows.filter(r => r.expired).length;
+
+    document.getElementById('s-total').textContent   = total;
+    document.getElementById('s-online').textContent  = online;
+    document.getElementById('s-active').textContent  = active;
+    document.getElementById('s-expired').textContent = expired;
+
+    // Table
+    if (!rows.length) {
+      document.getElementById('tbody').innerHTML = `<tr><td colspan="7" class="empty">No passes generated yet — click Generate to create your first one</td></tr>`;
+      return;
+    }
+
+    document.getElementById('tbody').innerHTML = rows.map(row => {
+      const dotCls  = row.expired ? 'expired' : row.online ? 'online' : 'offline';
+      const statusTxt = row.expired ? 'Expired' : row.online ? 'Online' : 'Offline';
+      const pillCls = row.expired ? 'expired' : row.days_left === null ? 'permanent' : 'active';
+      const pillTxt = row.expired ? 'Expired' : row.days_left === null ? 'Permanent' : `${row.days_left}d left`;
+      return `<tr>
+        <td><span class="dot ${dotCls}"></span>${statusTxt}</td>
+        <td>${row.name || '<span style="color:#444">—</span>'}</td>
+        <td><span class="code-mono">${row.code}</span></td>
+        <td><span class="pill ${pillCls}">${pillTxt}</span></td>
+        <td>${fmt(row.created_at)}</td>
+        <td>${row.expires_at ? fmt(row.expires_at) : '∞ Never'}</td>
+        <td>${fmtTime(row.last_seen)}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('refresh-lbl').textContent = `Last refreshed: ${new Date().toLocaleTimeString()}`;
+  } catch(e) {
+    document.getElementById('tbody').innerHTML = `<tr><td colspan="7" class="empty" style="color:#ff4444">Error loading — check your secret key in the URL</td></tr>`;
+  }
+}
+
+async function generatePass(permanent) {
+  const r = await fetch(`/api/access/generate?secret=${secret}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({permanent})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    document.getElementById('link-text').textContent = d.link;
+    document.getElementById('link-box').style.display = 'block';
+    document.getElementById('copy-btn').textContent = 'Copy';
+    document.getElementById('copy-btn').classList.remove('copied');
+    load();
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+}
+
+function copyLink() {
+  const txt = document.getElementById('link-text').textContent;
+  navigator.clipboard.writeText(txt).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>
