@@ -27,7 +27,9 @@ Environment variables required:
 
 import os
 import time
-from datetime import datetime, date, timedelta
+import secrets
+import string
+from datetime import datetime, date, timedelta, timezone
 from functools import wraps
 
 from flask import Flask, jsonify, request, render_template, abort, make_response, redirect
@@ -58,23 +60,123 @@ def require_api_secret(f):
     return decorated
 
 
+# ── Access code helper ────────────────────────────────────────────────────────────
+def _gen_code(length=8):
+    chars = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(chars) for _ in range(length))
+
+
 # ── Frontend ─────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
-    if DASHBOARD_PASSWORD:
-        auth = request.cookies.get("auth")
-        if auth != DASHBOARD_PASSWORD:
-            return render_template("login.html")
     return render_template("index.html")
 
-@app.route("/login", methods=["POST"])
-def login():
-    password = request.form.get("password", "")
-    if password == DASHBOARD_PASSWORD:
-        resp = make_response(redirect("/"))
-        resp.set_cookie("auth", password, max_age=60*60*24*30)
-        return resp
-    return render_template("login.html", error="Wrong password")
+@app.route("/admin/codes")
+def admin_codes():
+    provided = request.args.get("secret", "")
+    if not API_SECRET or provided != API_SECRET:
+        abort(401, "Access denied — add ?secret=YOUR_SECRET to the URL")
+    return render_template("admin_codes.html")
+
+
+# ── Access pass API ───────────────────────────────────────────────────────────────
+@app.route("/api/access/validate", methods=["POST"])
+def api_access_validate():
+    data = request.get_json(force=True, silent=True) or {}
+    code = (data.get("code") or "").strip().upper()
+    name = (data.get("name") or "").strip()
+
+    if not code:
+        return jsonify({"valid": False, "error": "No code provided"}), 400
+
+    resp = supabase.table("access_codes").select("*").eq("code", code).execute()
+    rows = resp.data or []
+    if not rows:
+        return jsonify({"valid": False, "error": "Invalid access code"}), 403
+
+    row  = rows[0]
+    now  = datetime.now(timezone.utc)
+
+    if row.get("expires_at"):
+        exp = datetime.fromisoformat(row["expires_at"].replace("Z", "+00:00"))
+        if now > exp:
+            return jsonify({"valid": False, "error": "This pass has expired"}), 403
+
+    update = {"last_seen": now.isoformat()}
+    if name:
+        update["name"] = name
+    supabase.table("access_codes").update(update).eq("code", code).execute()
+
+    return jsonify({
+        "valid":      True,
+        "code":       code,
+        "name":       name or row.get("name", ""),
+        "expires_at": row.get("expires_at"),
+    })
+
+
+@app.route("/api/access/heartbeat", methods=["POST"])
+def api_access_heartbeat():
+    data = request.get_json(force=True, silent=True) or {}
+    code = (data.get("code") or "").strip().upper()
+    if not code:
+        return jsonify({"ok": False}), 400
+
+    resp = supabase.table("access_codes").select("expires_at").eq("code", code).execute()
+    rows = resp.data or []
+    if not rows:
+        return jsonify({"ok": False, "expired": True}), 403
+
+    now = datetime.now(timezone.utc)
+    row = rows[0]
+    if row.get("expires_at"):
+        exp = datetime.fromisoformat(row["expires_at"].replace("Z", "+00:00"))
+        if now > exp:
+            return jsonify({"ok": False, "expired": True}), 403
+
+    supabase.table("access_codes").update({"last_seen": now.isoformat()}).eq("code", code).execute()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/access/generate", methods=["POST"])
+@require_api_secret
+def api_access_generate():
+    data      = request.get_json(force=True, silent=True) or {}
+    permanent = data.get("permanent", False)
+    code      = _gen_code()
+    now       = datetime.now(timezone.utc)
+    expires   = None if permanent else (now + timedelta(days=7)).isoformat()
+
+    supabase.table("access_codes").insert({"code": code, "expires_at": expires}).execute()
+
+    base = request.host_url.rstrip('/')
+    link = f"{base}/?code={code}"
+    return jsonify({"ok": True, "code": code, "link": link, "expires_at": expires})
+
+
+@app.route("/api/access/codes", methods=["GET"])
+@require_api_secret
+def api_access_codes():
+    resp = supabase.table("access_codes").select("*").order("created_at", desc=True).execute()
+    rows = resp.data or []
+    now  = datetime.now(timezone.utc)
+
+    for row in rows:
+        if row.get("expires_at"):
+            exp = datetime.fromisoformat(row["expires_at"].replace("Z", "+00:00"))
+            row["expired"]   = now > exp
+            row["days_left"] = max(0, (exp - now).days)
+        else:
+            row["expired"]   = False
+            row["days_left"] = None   # permanent
+
+        if row.get("last_seen"):
+            ls = datetime.fromisoformat(row["last_seen"].replace("Z", "+00:00"))
+            row["online"] = (now - ls).total_seconds() < 600
+        else:
+            row["online"] = False
+
+    return jsonify(rows)
 
 
 # ── Odds helper ──────────────────────────────────────────────────────────────────
