@@ -700,7 +700,7 @@
       <span class="subtitle" id="last-refresh">Loading…</span>
       <button class="icon-btn" id="notif-btn" onclick="handleNotifBtn()" title="Notifications">🔔</button>
       <button class="icon-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
-      <button class="icon-btn" onclick="window.open('/admin/codes?secret=mlbpicks2026','_blank')" title="Users">👥</button>
+      <button class="icon-btn" id="admin-btn" onclick="window.open('/admin/codes?secret=mlbpicks2026','_blank')" title="Users" style="display:none">👥</button>
     </div>
   </header>
 
@@ -743,6 +743,13 @@
       if (!stored.expires_at || new Date(stored.expires_at) > new Date()) {
         hasAccess = true;
         _startHeartbeat(stored.code);
+        // Show admin button only for permanent passes (no expiry = admin)
+        if (!stored.expires_at) {
+          document.addEventListener('DOMContentLoaded', () => {
+            const btn = document.getElementById('admin-btn');
+            if (btn) btn.style.display = '';
+          });
+        }
       } else {
         localStorage.removeItem('mlb_access');
       }
@@ -805,6 +812,10 @@ async function submitGate() {
       gate.style.opacity = '0';
       setTimeout(() => gate.style.display = 'none', 300);
       _startHeartbeat(d.code);
+      if (!d.expires_at) {
+        const btn = document.getElementById('admin-btn');
+        if (btn) btn.style.display = '';
+      }
     } else {
       errEl.textContent = d.error || 'Invalid code. Please try again.';
       errEl.style.display = 'block';
