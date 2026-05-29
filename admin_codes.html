@@ -68,9 +68,11 @@
   </div>
 
   <div class="btn-row">
-    <button class="btn btn-green" onclick="generatePass(false)">+ Generate 7-Day Pass</button>
-    <button class="btn btn-outline" onclick="generatePass(true)">+ Permanent Pass</button>
+    <button class="btn btn-green" onclick="generatePass(false,false)">+ 7-Day Pass</button>
+    <button class="btn btn-outline" onclick="generatePass(true,false)">+ Permanent Pass</button>
+    <button class="btn" style="background:#1a3a2a;color:#00e676;border:1px solid #00e676" onclick="generatePass(false,true)">🌐 Public Link</button>
   </div>
+  <div style="font-size:11px;color:#555;margin-top:-16px;margin-bottom:20px">7-Day Pass = 1 person · Public Link = unlimited people, same link</div>
 
   <div id="link-box">
     <div class="link-label">Share this link — it pre-fills the code automatically</div>
@@ -125,50 +127,92 @@ async function load() {
     const r = await fetch(`/api/access/codes?secret=${secret}`);
     const rows = await r.json();
 
-    // Stats
-    const total   = rows.length;
-    const online  = rows.filter(r => r.online && !r.expired).length;
-    const active  = rows.filter(r => !r.expired).length;
-    const expired = rows.filter(r => r.expired).length;
+    // Stats — count real people
+    let total = 0, online = 0, active = 0, expired = 0;
+    rows.forEach(row => {
+      if (row.multi_use) {
+        total   += row.user_count || 0;
+        online  += (!row.expired ? (row.online_count || 0) : 0);
+        if (row.expired) expired++; else active++;
+      } else {
+        if (row.user_count > 0) total++;
+        if (!row.expired && row.online) online++;
+        if (row.expired) expired++; else active++;
+      }
+    });
 
     document.getElementById('s-total').textContent   = total;
     document.getElementById('s-online').textContent  = online;
     document.getElementById('s-active').textContent  = active;
     document.getElementById('s-expired').textContent = expired;
 
-    // Table
     if (!rows.length) {
-      document.getElementById('tbody').innerHTML = `<tr><td colspan="7" class="empty">No passes generated yet — click Generate to create your first one</td></tr>`;
+      document.getElementById('tbody').innerHTML = `<tr><td colspan="7" class="empty">No passes yet — click Generate to create your first one</td></tr>`;
       return;
     }
 
-    document.getElementById('tbody').innerHTML = rows.map(row => {
-      const dotCls  = row.expired ? 'expired' : row.online ? 'online' : 'offline';
-      const statusTxt = row.expired ? 'Expired' : row.online ? 'Online' : 'Offline';
+    const html = [];
+    rows.forEach(row => {
       const pillCls = row.expired ? 'expired' : row.days_left === null ? 'permanent' : 'active';
       const pillTxt = row.expired ? 'Expired' : row.days_left === null ? 'Permanent' : `${row.days_left}d left`;
-      return `<tr>
-        <td><span class="dot ${dotCls}"></span>${statusTxt}</td>
-        <td>${row.name || '<span style="color:#444">—</span>'}</td>
-        <td><span class="code-mono">${row.code}</span></td>
-        <td><span class="pill ${pillCls}">${pillTxt}</span></td>
-        <td>${fmt(row.created_at)}</td>
-        <td>${row.expires_at ? fmt(row.expires_at) : '∞ Never'}</td>
-        <td>${fmtTime(row.last_seen)}</td>
-      </tr>`;
-    }).join('');
 
+      if (row.multi_use) {
+        // Public link row — show user count
+        const onlineTxt = row.online_count > 0 ? `<span style="color:#00e676">${row.online_count} online</span>` : '0 online';
+        html.push(`<tr style="background:#111">
+          <td><span style="color:#00b0ff;font-size:11px;font-weight:700">🌐 PUBLIC</span></td>
+          <td style="color:#aaa">${row.user_count} joined · ${onlineTxt}</td>
+          <td><span class="code-mono">${row.code}</span></td>
+          <td><span class="pill ${pillCls}">${pillTxt}</span></td>
+          <td>${fmt(row.created_at)}</td>
+          <td>${row.expires_at ? fmt(row.expires_at) : '∞ Never'}</td>
+          <td>—</td>
+        </tr>`);
+        // Sub-rows for each user
+        (row.users || []).forEach(u => {
+          const uDot = u.online ? 'online' : 'offline';
+          const uStatus = u.online ? 'Online' : 'Offline';
+          html.push(`<tr style="background:#0d0d0d">
+            <td style="padding-left:24px"><span class="dot ${uDot}"></span>${uStatus}</td>
+            <td>${u.name || '<span style="color:#444">—</span>'}</td>
+            <td style="color:#333">↳ same link</td>
+            <td></td>
+            <td>${fmt(u.joined_at)}</td>
+            <td>—</td>
+            <td>${fmtTime(u.last_seen)}</td>
+          </tr>`);
+        });
+        if (!row.users || row.users.length === 0) {
+          html.push(`<tr style="background:#0d0d0d"><td colspan="7" style="padding:8px 24px;color:#333;font-size:12px">No one has used this link yet</td></tr>`);
+        }
+      } else {
+        // Single-use row
+        const dotCls    = row.expired ? 'expired' : row.online ? 'online' : 'offline';
+        const statusTxt = row.expired ? 'Expired' : row.online ? 'Online' : 'Offline';
+        html.push(`<tr>
+          <td><span class="dot ${dotCls}"></span>${statusTxt}</td>
+          <td>${row.name || '<span style="color:#444">—</span>'}</td>
+          <td><span class="code-mono">${row.code}</span></td>
+          <td><span class="pill ${pillCls}">${pillTxt}</span></td>
+          <td>${fmt(row.created_at)}</td>
+          <td>${row.expires_at ? fmt(row.expires_at) : '∞ Never'}</td>
+          <td>${fmtTime(row.last_seen)}</td>
+        </tr>`);
+      }
+    });
+
+    document.getElementById('tbody').innerHTML = html.join('');
     document.getElementById('refresh-lbl').textContent = `Last refreshed: ${new Date().toLocaleTimeString()}`;
   } catch(e) {
     document.getElementById('tbody').innerHTML = `<tr><td colspan="7" class="empty" style="color:#ff4444">Error loading — check your secret key in the URL</td></tr>`;
   }
 }
 
-async function generatePass(permanent) {
+async function generatePass(permanent, multi_use) {
   const r = await fetch(`/api/access/generate?secret=${secret}`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({permanent})
+    body: JSON.stringify({permanent, multi_use})
   });
   const d = await r.json();
   if (d.ok) {
