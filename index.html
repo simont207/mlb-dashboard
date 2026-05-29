@@ -733,28 +733,42 @@
    ACCESS GATE
 ══════════════════════════════════════════════════════════════════════ */
 (function(){
+  // ── Cookie helpers (persist across iOS PWA sessions) ──
+  function _setCookie(val, days) {
+    const d = new Date();
+    d.setTime(d.getTime() + days * 864e5);
+    document.cookie = `mlb_access=${encodeURIComponent(val)};expires=${d.toUTCString()};path=/;SameSite=Strict`;
+  }
+  function _getCookie() {
+    const m = document.cookie.match(/(?:^| )mlb_access=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  function _delCookie() {
+    document.cookie = 'mlb_access=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/';
+  }
+  window._setAccess  = (val) => { _setCookie(JSON.stringify(val), 365); };
+  window._getAccess  = ()    => { try { return JSON.parse(_getCookie()); } catch(e) { return null; } };
+  window._clearAccess= ()    => { _delCookie(); };
+
   const urlCode = new URLSearchParams(location.search).get('code');
   if (urlCode) history.replaceState({}, '', location.pathname);
 
   let hasAccess = false;
-  try {
-    const stored = JSON.parse(localStorage.getItem('mlb_access') || 'null');
-    if (stored && stored.code) {
-      if (!stored.expires_at || new Date(stored.expires_at) > new Date()) {
-        hasAccess = true;
-        _startHeartbeat(stored.code, stored.user_id || null);
-        // Show admin button only for permanent passes (no expiry = admin)
-        if (!stored.expires_at) {
-          document.addEventListener('DOMContentLoaded', () => {
-            const btn = document.getElementById('admin-btn');
-            if (btn) btn.style.display = '';
-          });
-        }
-      } else {
-        localStorage.removeItem('mlb_access');
+  const stored = window._getAccess();
+  if (stored && stored.code) {
+    if (!stored.expires_at || new Date(stored.expires_at) > new Date()) {
+      hasAccess = true;
+      _startHeartbeat(stored.code, stored.user_id || null);
+      if (!stored.expires_at) {
+        document.addEventListener('DOMContentLoaded', () => {
+          const btn = document.getElementById('admin-btn');
+          if (btn) btn.style.display = '';
+        });
       }
+    } else {
+      window._clearAccess();
     }
-  } catch(e) {}
+  }
 
   if (!hasAccess) {
     document.addEventListener('DOMContentLoaded', () => {
@@ -778,7 +792,7 @@ function _startHeartbeat(code, user_id) {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({code, user_id})
   }).then(r=>r.json()).then(d=>{
-    if (d.expired) { localStorage.removeItem('mlb_access'); location.reload(); }
+    if (d.expired) { window._clearAccess(); location.reload(); }
   }).catch(()=>{});
   ping();
   setInterval(ping, 5 * 60 * 1000);
@@ -804,9 +818,9 @@ async function submitGate() {
     const d = await r.json();
 
     if (d.valid) {
-      localStorage.setItem('mlb_access', JSON.stringify({
+      window._setAccess({
         code: d.code, name: d.name, expires_at: d.expires_at, user_id: d.user_id || null
-      }));
+      });
       const gate = document.getElementById('access-gate');
       gate.style.transition = 'opacity 0.3s';
       gate.style.opacity = '0';
