@@ -643,9 +643,55 @@
       font-weight: 700; letter-spacing: 0.3px;
     }
     .a2hs-arrow::before { content: '↓ '; }
+    /* ── Access Gate ── */
+    #access-gate {
+      position: fixed; inset: 0; z-index: 9999;
+      background: var(--bg);
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      padding: 32px 24px;
+    }
+    .gate-logo  { font-size: 58px; margin-bottom: 14px; }
+    .gate-title { font-size: 26px; font-weight: 800; color: var(--text); }
+    .gate-sub   { font-size: 13px; color: var(--muted); margin: 6px 0 28px; text-align: center; }
+    .gate-card  {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+      padding: 24px; width: 100%; max-width: 360px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .gate-input {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px; font-size: 16px; color: var(--text); width: 100%;
+      outline: none; transition: border-color 0.2s; -webkit-appearance: none;
+    }
+    .gate-input:focus  { border-color: var(--accent); }
+    .gate-input::placeholder { color: var(--muted); }
+    .gate-btn {
+      background: var(--accent); color: #000; border: none; border-radius: 12px;
+      padding: 15px; font-size: 16px; font-weight: 800; cursor: pointer;
+      transition: opacity 0.15s; width: 100%; margin-top: 4px;
+    }
+    .gate-btn:active { opacity: 0.8; }
+    .gate-btn:disabled { opacity: 0.6; cursor: default; }
+    .gate-error { color: var(--loss); font-size: 13px; text-align: center; display: none; }
   </style>
 </head>
 <body>
+
+<!-- Access Gate (shown to users without a valid pass) -->
+<div id="access-gate">
+  <div class="gate-logo">⚾</div>
+  <div class="gate-title">MLB Picks Bot</div>
+  <div class="gate-sub">Premium picks, daily at 11:30am EST</div>
+  <div class="gate-card">
+    <input class="gate-input" id="gate-name" type="text" placeholder="Your name" autocomplete="name" />
+    <input class="gate-input" id="gate-code" type="text" placeholder="Access code" autocomplete="off"
+           style="text-transform:uppercase;letter-spacing:2px"
+           onkeydown="if(event.key==='Enter')submitGate()" />
+    <button class="gate-btn" id="gate-btn" onclick="submitGate()">Get Access ⚾</button>
+    <div class="gate-error" id="gate-error"></div>
+  </div>
+</div>
+
 <div id="app">
   <header>
     <div class="header-logo">⚾</div>
@@ -682,6 +728,94 @@
 </div>
 
 <script>
+/* ══════════════════════════════════════════════════════════════════════
+   ACCESS GATE
+══════════════════════════════════════════════════════════════════════ */
+(function(){
+  const urlCode = new URLSearchParams(location.search).get('code');
+  if (urlCode) history.replaceState({}, '', location.pathname);
+
+  let hasAccess = false;
+  try {
+    const stored = JSON.parse(localStorage.getItem('mlb_access') || 'null');
+    if (stored && stored.code) {
+      if (!stored.expires_at || new Date(stored.expires_at) > new Date()) {
+        hasAccess = true;
+        _startHeartbeat(stored.code);
+      } else {
+        localStorage.removeItem('mlb_access');
+      }
+    }
+  } catch(e) {}
+
+  if (!hasAccess) {
+    document.addEventListener('DOMContentLoaded', () => {
+      const gate = document.getElementById('access-gate');
+      if (gate) gate.style.display = 'flex';
+      if (urlCode) {
+        const ci = document.getElementById('gate-code');
+        if (ci) ci.value = urlCode.toUpperCase();
+        const ni = document.getElementById('gate-name');
+        if (ni) ni.focus();
+      } else {
+        const ni = document.getElementById('gate-name');
+        if (ni) ni.focus();
+      }
+    });
+  }
+})();
+
+function _startHeartbeat(code) {
+  const ping = () => fetch('/api/access/heartbeat', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({code})
+  }).then(r=>r.json()).then(d=>{
+    if (d.expired) { localStorage.removeItem('mlb_access'); location.reload(); }
+  }).catch(()=>{});
+  ping();
+  setInterval(ping, 5 * 60 * 1000);
+}
+
+async function submitGate() {
+  const name  = (document.getElementById('gate-name').value || '').trim();
+  const code  = (document.getElementById('gate-code').value || '').trim().toUpperCase();
+  const errEl = document.getElementById('gate-error');
+  const btn   = document.getElementById('gate-btn');
+
+  errEl.style.display = 'none';
+  if (!name) { errEl.textContent = 'Please enter your name'; errEl.style.display = 'block'; return; }
+  if (!code) { errEl.textContent = 'Please enter your access code'; errEl.style.display = 'block'; return; }
+
+  btn.textContent = 'Checking…'; btn.disabled = true;
+
+  try {
+    const r = await fetch('/api/access/validate', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({code, name})
+    });
+    const d = await r.json();
+
+    if (d.valid) {
+      localStorage.setItem('mlb_access', JSON.stringify({
+        code: d.code, name: d.name, expires_at: d.expires_at
+      }));
+      const gate = document.getElementById('access-gate');
+      gate.style.transition = 'opacity 0.3s';
+      gate.style.opacity = '0';
+      setTimeout(() => gate.style.display = 'none', 300);
+      _startHeartbeat(d.code);
+    } else {
+      errEl.textContent = d.error || 'Invalid code. Please try again.';
+      errEl.style.display = 'block';
+      btn.textContent = 'Get Access ⚾'; btn.disabled = false;
+    }
+  } catch(e) {
+    errEl.textContent = 'Connection error. Please try again.';
+    errEl.style.display = 'block';
+    btn.textContent = 'Get Access ⚾'; btn.disabled = false;
+  }
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    TEAM LOGOS
 ══════════════════════════════════════════════════════════════════════ */
