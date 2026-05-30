@@ -1086,6 +1086,84 @@ function buildGameOverBanner(game, pickedTeam) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   LINE COMPARISON (multi-book sharp signal)
+══════════════════════════════════════════════════════════════════════ */
+function buildLineComparison(p) {
+  if (!oddsData || !Object.keys(oddsData).length) return '';
+  const pickedTeam = p.pick;
+
+  // Match game by away|home key (fuzzy — try both orderings)
+  let game = oddsData[`${p.away_team}|${p.home_team}`]
+          || oddsData[`${p.home_team}|${p.away_team}`];
+
+  // Fallback: partial name match
+  if (!game) {
+    const awayFrag = p.away_team.split(' ').pop().toLowerCase();
+    const homeFrag = p.home_team.split(' ').pop().toLowerCase();
+    game = Object.values(oddsData).find(g =>
+      g.away.toLowerCase().includes(awayFrag) &&
+      g.home.toLowerCase().includes(homeFrag)
+    );
+  }
+  if (!game) return '';
+
+  // Find picked team's odds — try exact then partial
+  let teamOdds = game.books[pickedTeam];
+  if (!teamOdds) {
+    const frag = pickedTeam.split(' ').pop().toLowerCase();
+    const match = Object.keys(game.books).find(k => k.toLowerCase().includes(frag));
+    if (match) teamOdds = game.books[match];
+  }
+  if (!teamOdds || !Object.keys(teamOdds).length) return '';
+
+  const BOOK_ORDER = ['Pinnacle','Betway','BetMGM','DraftKings','FanDuel'];
+  const entries = BOOK_ORDER.filter(b => teamOdds[b]).map(b => ({book: b, odds: teamOdds[b]}));
+  if (entries.length < 2) return '';
+
+  const maxOdds  = Math.max(...entries.map(e => e.odds));
+  const minOdds  = Math.min(...entries.map(e => e.odds));
+  const gap      = (maxOdds - minOdds).toFixed(2);
+  const bestBook = entries.find(e => e.odds === maxOdds);
+  const worstBook= entries.find(e => e.odds === minOdds);
+
+  const bars = entries.map(e => {
+    const pct  = Math.round((e.odds / maxOdds) * 100);
+    const best = e.odds === maxOdds;
+    return `<div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+      <span style="width:84px;font-size:11px;color:var(--muted);flex-shrink:0">${e.book}</span>
+      <div style="flex:1;background:var(--border);border-radius:4px;height:5px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;border-radius:4px;background:${best?'var(--accent)':'#444'}"></div>
+      </div>
+      <span style="font-size:12px;font-weight:${best?'800':'400'};color:${best?'var(--accent)':'var(--text)'};min-width:32px;text-align:right">${e.odds.toFixed(2)}</span>
+    </div>`;
+  }).join('');
+
+  let signal = '';
+  const gapNum = parseFloat(gap);
+  if (gapNum >= 0.15) {
+    if (bestBook.book === 'Pinnacle') {
+      signal = `<div style="margin-top:10px;padding:8px 10px;background:rgba(0,230,118,0.1);border-radius:8px;font-size:12px;color:var(--win)">✅ Pinnacle best odds — sharp money agrees with this pick</div>`;
+    } else if (worstBook.book === 'Pinnacle') {
+      signal = `<div style="margin-top:10px;padding:8px 10px;background:rgba(255,68,68,0.1);border-radius:8px;font-size:12px;color:var(--loss)">⚠️ Pinnacle worst odds — sharps may be fading this pick</div>`;
+    } else {
+      signal = `<div style="margin-top:10px;padding:8px 10px;background:rgba(255,214,0,0.08);border-radius:8px;font-size:12px;color:#ffd600">⚡ ${gap} gap — possible sharp action detected</div>`;
+    }
+  } else {
+    signal = `<div style="margin-top:8px;font-size:11px;color:var(--muted)">⚡ ${gap} spread — lines in agreement</div>`;
+  }
+
+  return `<div class="rd-section">
+    <div class="rd-section-title">📊 Line Comparison — Sharp Signal</div>
+    ${bars}
+    <div style="display:flex;gap:12px;margin-top:8px">
+      <span style="font-size:11px;color:var(--muted)">Best: <strong style="color:var(--win)">${bestBook.book} ${bestBook.odds.toFixed(2)}</strong></span>
+      <span style="font-size:11px;color:var(--muted)">Worst: <strong style="color:var(--loss)">${worstBook.book} ${worstBook.odds.toFixed(2)}</strong></span>
+    </div>
+    ${signal}
+  </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    PICK REASONING
 ══════════════════════════════════════════════════════════════════════ */
 function generateReasoning(p) {
@@ -1250,7 +1328,8 @@ function generateReasoning(p) {
   else if(edge>=1.5) verdictText=`<strong>${pickedLast} ML</strong> is a confident play. The edge of ${edge.toFixed(2)} clears the threshold comfortably, with the model's win probability outpacing market pricing. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
   else verdictText=`<strong>${pickedLast} ML</strong> qualifies on model edge at ${edge.toFixed(2)}. The model detects value the market hasn't fully priced. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
 
-  return `${s1}${s2}${sForm}${s3}<div class="rd-verdict"><div class="rd-verdict-title">📋 Verdict</div><div class="rd-verdict-text">${verdictText}</div></div>`;
+  const sOdds = buildLineComparison(p);
+  return `${s1}${s2}${sForm}${sOdds}${s3}<div class="rd-verdict"><div class="rd-verdict-title">📋 Verdict</div><div class="rd-verdict-text">${verdictText}</div></div>`;
 }
 
 function toggleReasoning(id) {
@@ -1270,6 +1349,7 @@ function toggleReasoning(id) {
 let activeTab='today';
 let allPicks=[];           // global — loaded with record tab, used in buildReasoning
 let teamStats={};          // global — loaded with today tab, used in buildReasoning
+let oddsData={};           // global — live multi-book odds, used in buildReasoning
 const REFRESH=5*60*1000;
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1490,6 +1570,13 @@ async function loadToday(){
     fetchJSON(`/api/team_stats?secret=mlbpicks2026`).then(d=>{
       if(d&&d.teams){
         teamStats=d.teams;
+        setPanel('panel-today', renderToday(picks,ticker,lineupWarnings,games,recData));
+        animateEdgeBars(); animateEdgeRings(); updateCountdowns();
+      }
+    }).catch(()=>{});
+    fetchJSON(`/api/odds`).then(d=>{
+      if(d&&d.games){
+        oddsData=d.games;
         setPanel('panel-today', renderToday(picks,ticker,lineupWarnings,games,recData));
         animateEdgeBars(); animateEdgeRings(); updateCountdowns();
       }
