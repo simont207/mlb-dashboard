@@ -454,6 +454,56 @@ def api_update_results():
     return jsonify({"ok": True, "updated": updated})
 
 
+# ── Today's games proxy ───────────────────────────────────────────────────────────
+@app.route("/api/todays_games", methods=["GET"])
+@require_api_secret
+def api_todays_games():
+    import requests as _req
+    from datetime import datetime as _dt
+
+    target = request.args.get("date") or _dt.today().strftime("%Y-%m-%d")
+    mlb_date = _dt.strptime(target, "%Y-%m-%d").strftime("%m/%d/%Y")
+
+    url = (f"https://statsapi.mlb.com/api/v1/schedule"
+           f"?sportId=1&date={mlb_date}"
+           f"&hydrate=probablePitcher,linescore&gameType=R")
+    hdrs = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    try:
+        resp = _req.get(url, headers=hdrs, timeout=25)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+    games = []
+    for date_entry in data.get("dates", []):
+        for game in date_entry.get("games", []):
+            if game.get("gameType") != "R":
+                continue
+            teams     = game.get("teams", {})
+            away      = teams.get("away", {})
+            home      = teams.get("home", {})
+            away_p    = away.get("probablePitcher", {}).get("fullName", "")
+            home_p    = home.get("probablePitcher", {}).get("fullName", "")
+            games.append({
+                "game_id":               str(game.get("gamePk", "")),
+                "game_type":             game.get("gameType", "R"),
+                "away_name":             away.get("team", {}).get("name", ""),
+                "home_name":             home.get("team", {}).get("name", ""),
+                "away_probable_pitcher": away_p,
+                "home_probable_pitcher": home_p,
+                "venue_name":            game.get("venue", {}).get("name", ""),
+                "game_datetime":         game.get("gameDate", ""),
+                "status":                game.get("status", {}).get("abstractGameState", ""),
+            })
+
+    return jsonify({"ok": True, "games": games})
+
+
 # ── F5 stats proxy (Render IP not blocked by MLB API) ────────────────────────────
 @app.route("/api/f5_stats", methods=["GET"])
 @require_api_secret
