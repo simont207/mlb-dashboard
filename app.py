@@ -687,6 +687,53 @@ def api_team_stats():
     return jsonify(result)
 
 
+# ── Live odds (multi-book line comparison) ───────────────────────────────────────
+_odds_cache = {"data": None, "ts": 0}
+
+@app.route("/api/odds", methods=["GET"])
+def api_odds():
+    import requests as _req
+    now = time.time()
+    if _odds_cache["data"] and now - _odds_cache["ts"] < 900:   # 15-min cache
+        return jsonify(_odds_cache["data"])
+
+    ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "999d33b533c90c3b35e6dfeece550932")
+    BOOKS        = "pinnacle,betway,betmgm,draftkings,fanduel"
+    url = (f"https://api.the-odds-api.com/v4/sports/baseball_mlb/odds/"
+           f"?apiKey={ODDS_API_KEY}&regions=us,eu&markets=h2h"
+           f"&oddsFormat=decimal&bookmakers={BOOKS}")
+    try:
+        resp = _req.get(url, timeout=15)
+        resp.raise_for_status()
+        games = resp.json()
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+    result = {}
+    for game in games:
+        away = game.get("away_team", "")
+        home = game.get("home_team", "")
+        key  = f"{away}|{home}"
+        books_data = {}
+        for bm in game.get("bookmakers", []):
+            title = bm["title"]
+            for market in bm.get("markets", []):
+                if market["key"] != "h2h":
+                    continue
+                for outcome in market["outcomes"]:
+                    team  = outcome["name"]
+                    price = outcome["price"]
+                    if team not in books_data:
+                        books_data[team] = {}
+                    books_data[team][title] = price
+        result[key] = {"away": away, "home": home, "books": books_data}
+
+    data = {"ok": True, "games": result, "cached_at": int(now)}
+    _odds_cache["data"] = data
+    _odds_cache["ts"]   = now
+    return jsonify(data)
+
+
 # ── Yesterday results proxy ───────────────────────────────────────────────────────
 @app.route("/api/yesterday_results", methods=["GET"])
 @require_api_secret
