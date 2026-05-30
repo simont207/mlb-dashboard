@@ -93,6 +93,7 @@
           <th>Joined</th>
           <th>Expires</th>
           <th>Last Seen</th>
+          <th></th>
         </tr>
       </thead>
       <tbody id="tbody">
@@ -167,6 +168,7 @@ async function load() {
           <td>${fmt(row.created_at)}</td>
           <td>${row.expires_at ? fmt(row.expires_at) : '∞ Never'}</td>
           <td>—</td>
+          <td><button onclick="deletePass('${row.code}')" style="background:#1a0000;color:#ff4444;border:1px solid #3a0000;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">✕</button></td>
         </tr>`);
         // Sub-rows for each user
         (row.users || []).forEach(u => {
@@ -197,6 +199,7 @@ async function load() {
           <td>${fmt(row.created_at)}</td>
           <td>${row.expires_at ? fmt(row.expires_at) : '∞ Never'}</td>
           <td>${fmtTime(row.last_seen)}</td>
+          <td><button onclick="deletePass('${row.code}')" style="background:#1a0000;color:#ff4444;border:1px solid #3a0000;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">✕</button></td>
         </tr>`);
       }
     });
@@ -233,6 +236,16 @@ function copyLink() {
     btn.classList.add('copied');
     setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
   });
+}
+
+async function deletePass(code) {
+  if (!confirm(`Delete pass ${code}? This cannot be undone.`)) return;
+  await fetch(`/api/access/delete?secret=${secret}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({code})
+  });
+  load();
 }
 
 load();
