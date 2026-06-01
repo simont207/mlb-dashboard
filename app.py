@@ -77,6 +77,17 @@ def _gen_code(length=8):
 def index():
     return render_template("index.html")
 
+@app.route("/sw.js")
+def service_worker():
+    import os as _os
+    from flask import send_from_directory, make_response as _mkr
+    resp = _mkr(send_from_directory(
+        _os.path.join(_os.path.dirname(__file__), "static"), "sw.js"
+    ))
+    resp.headers["Service-Worker-Allowed"] = "/"
+    resp.headers["Content-Type"] = "application/javascript"
+    return resp
+
 @app.route("/admin/codes")
 def admin_codes():
     provided = request.args.get("secret", "")
@@ -1018,3 +1029,4 @@ def debug_info():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
