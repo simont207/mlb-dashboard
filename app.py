@@ -27,6 +27,7 @@ Environment variables required:
 
 import os
 import time
+import json
 import secrets
 import string
 from datetime import datetime, date, timedelta, timezone
@@ -44,6 +45,11 @@ API_SECRET         = os.environ.get("API_SECRET", "")
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ── VAPID (Web Push) ──────────────────────────────────────────────────────────────
+VAPID_PUBLIC_KEY  = os.environ.get("VAPID_PUBLIC_KEY",  "BJGPf1HT0hcpH-MzrSs6Tz_zlBMmJcCusJ75ZPEgcvVleyOlGrO2Szw_3eT5Ok0n1gBYL9Uhy_ke7aJUs_vxPyA")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "HcrEnucNdJ-ft7XGbzIPatJOPETnk2lZNjCQw9N6BEU")
+VAPID_CLAIMS      = {"sub": "mailto:simontierney365@gmail.com"}
 
 # ── Auth decorator ───────────────────────────────────────────────────────────────
 def require_api_secret(f):
@@ -889,6 +895,16 @@ def api_check_results():
         updated += 1
         details.append({"game": f"{away} @ {home}", "pick": chosen, "result": result})
 
+    # Push notifications for settled results
+    for item in details:
+        emoji  = "✅" if item["result"] == "W" else ("❌" if item["result"] == "L" else "➖")
+        label  = "WIN" if item["result"] == "W" else ("LOSS" if item["result"] == "L" else "PUSH")
+        _send_push_to_all(
+            title=f"{emoji} {item['pick'].split()[-1]} — {label}",
+            body=f"{item['game']} · Result recorded",
+            url="/"
+        )
+
     return jsonify({
         "ok":      True,
         "date":    today,
@@ -897,6 +913,62 @@ def api_check_results():
         "finals":  len(final_games),
         "pending": len(pending),
     })
+
+
+# ── Push notifications ────────────────────────────────────────────────────────────
+@app.route("/api/push/subscribe", methods=["POST"])
+def api_push_subscribe():
+    data   = request.get_json(force=True, silent=True) or {}
+    sub    = data.get("subscription", {})
+    name   = data.get("name", "")
+    endpoint = sub.get("endpoint", "")
+    keys     = sub.get("keys", {})
+    p256dh   = keys.get("p256dh", "")
+    auth     = keys.get("auth", "")
+    if not endpoint or not p256dh or not auth:
+        return jsonify({"ok": False, "error": "Missing subscription fields"}), 400
+    supabase.table("push_subscriptions").upsert({
+        "endpoint": endpoint, "p256dh": p256dh,
+        "auth": auth, "user_name": name,
+    }, on_conflict="endpoint").execute()
+    return jsonify({"ok": True})
+
+
+def _send_push_to_all(title, body, url="/"):
+    """Send a push notification to all active subscribers."""
+    try:
+        from pywebpush import webpush, WebPushException
+        subs = supabase.table("push_subscriptions").select("*").execute().data or []
+        dead = []
+        for sub in subs:
+            try:
+                webpush(
+                    subscription_info={
+                        "endpoint": sub["endpoint"],
+                        "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]},
+                    },
+                    data=json.dumps({"title": title, "body": body, "url": url}),
+                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_claims=VAPID_CLAIMS,
+                )
+            except Exception as e:
+                if "410" in str(e) or "404" in str(e):
+                    dead.append(sub["endpoint"])
+        for ep in dead:
+            supabase.table("push_subscriptions").delete().eq("endpoint", ep).execute()
+    except Exception:
+        pass   # never crash the caller
+
+
+@app.route("/api/push/send", methods=["POST"])
+@require_api_secret
+def api_push_send():
+    data  = request.get_json(force=True, silent=True) or {}
+    title = data.get("title", "⚾ MLB Picks Bot")
+    body  = data.get("body", "")
+    url   = data.get("url", "/")
+    _send_push_to_all(title, body, url)
+    return jsonify({"ok": True})
 
 
 # ── Health check ─────────────────────────────────────────────────────────────────
