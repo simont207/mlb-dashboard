@@ -918,6 +918,12 @@ function showToast(msg, duration=3500) {
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), duration);
 }
+const VAPID_PUBLIC_KEY = 'BJGPf1HT0hcpH-MzrSs6Tz_zlBMmJcCusJ75ZPEgcvVleyOlGrO2Szw_3eT5Ok0n1gBYL9Uhy_ke7aJUs_vxPyA';
+function urlBase64ToUint8Array(b64) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g,'+').replace(/_/g,'/'));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
 const NOTIF_KEY = 'notifEnabled';
 function notifEnabled() { return localStorage.getItem(NOTIF_KEY) !== 'off'; }
 function setNotifEnabled(val) { localStorage.setItem(NOTIF_KEY, val ? 'on' : 'off'); }
@@ -939,43 +945,43 @@ function updateNotifBtn() {
 }
 async function handleNotifBtn() {
   haptic(10);
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  if (!('Notification' in window)) {
-    showToast(isIOS
-      ? 'On iOS: Safari → Share → Add to Home Screen, then enable notifications'
-      : 'Notifications not supported in this browser', 5000);
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    showToast('Open from your Home Screen icon to enable push notifications', 5000);
     return;
   }
   if (Notification.permission === 'denied') {
-    showToast('Notifications blocked — go to browser Settings → Site Settings to allow', 5000);
+    showToast('Notifications blocked — go to Settings → Safari to allow', 5000);
     return;
   }
-  if (Notification.permission === 'granted') {
-    // Toggle on/off
-    const nowEnabled = !notifEnabled();
-    setNotifEnabled(nowEnabled);
-    updateNotifBtn();
-    if (nowEnabled) {
-      try { new Notification('⚾ MLB Picks Bot', { body: 'Notifications on! You\'ll be alerted when picks drop.', icon: '/static/icon-192.png' }); } catch(e){}
-      showToast('🔔 Notifications turned on');
-    } else {
-      showToast('🔕 Notifications turned off');
-    }
-    return;
-  }
-  // Not yet asked — request permission
   try {
-    const perm = await Notification.requestPermission();
-    if (perm === 'granted') {
-      setNotifEnabled(true);
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      // Already subscribed — turn off
+      await existing.unsubscribe();
+      setNotifEnabled(false);
       updateNotifBtn();
-      try { new Notification('⚾ MLB Picks Bot', { body: 'Notifications on! You\'ll be alerted when picks drop.', icon: '/static/icon-192.png' }); } catch(e){}
-      showToast('🔔 Notifications enabled!');
-    } else {
-      showToast('Notifications declined');
+      showToast('🔕 Notifications turned off');
+      return;
     }
+    // Request permission + subscribe
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { showToast('Notifications declined'); return; }
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    const access = window._getAccess ? window._getAccess() : null;
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ subscription: sub.toJSON(), name: access?.name || '' })
+    });
+    setNotifEnabled(true);
+    updateNotifBtn();
+    showToast('🔔 Notifications on! You\'ll get picks & results automatically.');
   } catch(e) {
-    showToast('Could not request notification permission');
+    showToast('Could not enable notifications — open from Home Screen icon', 4000);
   }
 }
 function maybeNotify(picks) {
