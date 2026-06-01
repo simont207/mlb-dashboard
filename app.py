@@ -229,6 +229,19 @@ def api_access_codes():
     return jsonify(result)
 
 
+# ── Unit sizing (mirrors dashboard logic) ────────────────────────────────────────
+def get_units(margin):
+    """Return recommended bet units based on edge/margin score."""
+    try:
+        m = float(margin)
+        if m >= 2.5: return 2.5
+        if m >= 2.0: return 2.0
+        if m >= 1.5: return 1.5
+        return 1.0
+    except (TypeError, ValueError):
+        return 1.0
+
+
 # ── Odds helper ──────────────────────────────────────────────────────────────────
 def odds_payout(odds_str, bet=100):
     """Return profit on a winning bet.
@@ -262,15 +275,17 @@ def api_record():
     total_risked = 0.0
 
     for row in rows:
-        r = (row.get("result") or "").strip().upper()
+        r     = (row.get("result") or "").strip().upper()
+        units = get_units(row.get("margin"))
+        bet   = 100 * units
         if r == "W":
             wins += 1
-            profit += odds_payout(row.get("pick_odds"))
-            total_risked += 100
+            profit += odds_payout(row.get("pick_odds"), bet=bet)
+            total_risked += bet
         elif r == "L":
             losses += 1
-            profit -= 100
-            total_risked += 100
+            profit -= bet
+            total_risked += bet
         elif r == "P":
             pushes += 1
 
@@ -355,11 +370,13 @@ def api_chart():
     cumulative = 0.0
 
     for row in rows:
-        r = (row.get("result") or "").strip().upper()
+        r     = (row.get("result") or "").strip().upper()
+        units = get_units(row.get("margin"))
+        bet   = 100 * units
         if r == "W":
-            cumulative += odds_payout(row.get("pick_odds"))
+            cumulative += odds_payout(row.get("pick_odds"), bet=bet)
         elif r == "L":
-            cumulative -= 100
+            cumulative -= bet
         # pushes don't change profit
         points.append({"date": row["date"], "profit": round(cumulative, 2)})
 
