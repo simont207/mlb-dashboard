@@ -1,4 +1,30 @@
 /* MLB Picks — Service Worker */
+
+// ── Push notifications ────────────────────────────────────────────────────
+self.addEventListener('push', event => {
+  const data = event.data ? event.data.json() : {};
+  event.waitUntil(
+    self.registration.showNotification(data.title || '⚾ MLB Picks Bot', {
+      body:              data.body || '',
+      icon:              '/static/icon-192.png',
+      badge:             '/static/icon-192.png',
+      data:              { url: data.url || '/' },
+      requireInteraction: false,
+    })
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then(list => {
+      for (const client of list) {
+        if ('focus' in client) return client.focus();
+      }
+      return clients.openWindow(event.notification.data?.url || '/');
+    })
+  );
+});
 const CACHE_NAME = 'mlb-picks-v1';
 
 // Assets to pre-cache (offline shell)
