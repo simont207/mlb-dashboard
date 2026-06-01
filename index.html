@@ -1492,6 +1492,17 @@ async function loadLineupWarnings(picks){
   if(!picks||!picks.length)return{};
   try{
     const today=localDate();
+
+    // ── Check for pitcher changes via proxy ───────────────────────────
+    let currentPitchers={};
+    try{
+      const gd=await fetchJSON('/api/todays_games?secret=mlbpicks2026');
+      for(const g of(gd.games||[])){
+        const key=`${g.away_name}|${g.home_name}`;
+        currentPitchers[key]={away:g.away_probable_pitcher,home:g.home_probable_pitcher};
+      }
+    }catch(e){}
+
     const schedData=await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=lineups&gameType=R`).then(r=>r.json());
     const gameLineups={};
     for(const de of(schedData.dates||[])){
@@ -1505,22 +1516,34 @@ async function loadLineupWarnings(picks){
         }
       }
     }
-    if(!Object.keys(gameLineups).length)return{};
     const allGames=(schedData.dates||[]).flatMap(d=>d.games||[]);
     const warnings={};
     for(const p of picks){
-      const game=allGames.find(g=>g.teams?.away?.team?.name===p.away_team&&g.teams?.home?.team?.name===p.home_team);
-      if(!game)continue;
-      const lup=gameLineups[game.gamePk];
-      if(!lup)continue;
       const pickKey=`${p.away_team}|${p.home_team}`;
       const w=[];
-      const sides=[{name:p.away_team,id:lup.awayTeamId,confirmed:lup.away},{name:p.home_team,id:lup.homeTeamId,confirmed:lup.home}];
-      for(const side of sides){
-        if(!side.id)continue;
-        const topHitters=await _getTeamTopHitters(side.id);
-        for(const h of topHitters){
-          if(!side.confirmed.has(h.id)){w.push(`${side.name.split(' ').pop()}: ${h.name.split(' ').pop()} out`);}
+
+      // ── Pitcher change check ──────────────────────────────────────
+      const cp=currentPitchers[pickKey];
+      if(cp){
+        const awayChanged=cp.away&&p.away_pitcher&&!cp.away.toLowerCase().includes(p.away_pitcher.split(' ').pop().toLowerCase());
+        const homeChanged=cp.home&&p.home_pitcher&&!cp.home.toLowerCase().includes(p.home_pitcher.split(' ').pop().toLowerCase());
+        if(awayChanged) w.push(`🚨 PITCHER CHANGE: ${p.away_team.split(' ').pop()} — ${p.away_pitcher} → ${cp.away}`);
+        if(homeChanged) w.push(`🚨 PITCHER CHANGE: ${p.home_team.split(' ').pop()} — ${p.home_pitcher} → ${cp.home}`);
+      }
+
+      // ── Lineup check ─────────────────────────────────────────────
+      const game=allGames.find(g=>g.teams?.away?.team?.name===p.away_team&&g.teams?.home?.team?.name===p.home_team);
+      if(game){
+        const lup=gameLineups[game.gamePk];
+        if(lup){
+          const sides=[{name:p.away_team,id:lup.awayTeamId,confirmed:lup.away},{name:p.home_team,id:lup.homeTeamId,confirmed:lup.home}];
+          for(const side of sides){
+            if(!side.id)continue;
+            const topHitters=await _getTeamTopHitters(side.id);
+            for(const h of topHitters){
+              if(!side.confirmed.has(h.id)){w.push(`${side.name.split(' ').pop()}: ${h.name.split(' ').pop()} out`);}
+            }
+          }
         }
       }
       if(w.length)warnings[pickKey]=w;
