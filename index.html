@@ -1374,14 +1374,14 @@ function generateReasoning(p) {
   return `${s1}${s2}${sForm}${sOdds}${s3}<div class="rd-verdict"><div class="rd-verdict-title">📋 Verdict</div><div class="rd-verdict-text">${verdictText}</div></div>`;
 }
 
-async function voidPick(awayTeam, homeTeam, btn) {
+async function voidPick(awayTeam, homeTeam, pickDate, btn) {
   if(!confirm('Void this pick? It will be marked as VOID and excluded from your record.')) return;
   btn.textContent = 'Voiding…'; btn.disabled = true;
   try {
     const resp = await fetch('/api/void_pick', {
       method: 'POST',
       headers: {'Content-Type':'application/json','X-API-Secret':'mlbpicks2026'},
-      body: JSON.stringify({away_team: awayTeam, home_team: homeTeam})
+      body: JSON.stringify({away_team: awayTeam, home_team: homeTeam, date: pickDate})
     });
     const d = await resp.json();
     if(d.ok) {
@@ -1739,7 +1739,7 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
         <div class="pitcher-warn-body">
           <div class="pitcher-warn-title">⛔ Pitcher Alert — Do Not Bet</div>
           <div class="pitcher-warn-text">${w.replace('🚨 ','')}</div>
-          <button class="pitcher-warn-void" onclick="voidPick('${p.away_team}','${p.home_team}',this)">VOID THIS PICK</button>
+          <button class="pitcher-warn-void" onclick="voidPick('${p.away_team}','${p.home_team}','${p.date}',this)">VOID THIS PICK</button>
         </div>
       </div>`).join('');
     const lineupWarnHTML = (hitterWarns.length
