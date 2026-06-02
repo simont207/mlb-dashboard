@@ -312,6 +312,9 @@
       color: #ff7070; margin-bottom: 10px; line-height: 1.45;
     }
     .lineup-warn strong { color: #ff4444; }
+    @keyframes warn-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,68,68,0.5)} 50%{box-shadow:0 0 0 8px rgba(255,68,68,0)} }
+    @keyframes icon-flash  { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.3;transform:scale(1.3)} }
+    @keyframes icon-shake  { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-4px)} 40%{transform:translateX(4px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
     .pitcher-warn {
       background: rgba(255,68,68,0.15);
       border: 2px solid #ff4444;
@@ -319,11 +322,32 @@
       padding: 12px 14px;
       margin-bottom: 12px;
       display: flex; align-items: flex-start; gap: 10px;
+      animation: warn-pulse 1.5s ease-in-out infinite;
     }
-    .pitcher-warn-icon { font-size: 22px; flex-shrink: 0; line-height: 1; }
+    .pitcher-warn-icon {
+      font-size: 26px; flex-shrink: 0; line-height: 1;
+      animation: icon-flash 1s ease-in-out infinite, icon-shake 0.4s ease-in-out 0.2s 3;
+      display: inline-block;
+    }
     .pitcher-warn-body { flex: 1; }
-    .pitcher-warn-title { font-size: 13px; font-weight: 800; color: #ff4444; margin-bottom: 3px; letter-spacing: 0.2px; }
-    .pitcher-warn-text  { font-size: 12px; color: #ff7070; line-height: 1.4; }
+    .pitcher-warn-title { font-size: 13px; font-weight: 800; color: #ff4444; margin-bottom: 4px; letter-spacing: 0.3px; text-transform: uppercase; }
+    .pitcher-warn-text  { font-size: 12px; color: #ff7070; line-height: 1.4; margin-bottom: 8px; }
+    .pitcher-warn-void  {
+      background: #ff4444; color: #fff; border: none; border-radius: 7px;
+      padding: 7px 14px; font-size: 12px; font-weight: 800; cursor: pointer;
+      width: 100%; margin-top: 4px; letter-spacing: 0.3px;
+    }
+    .pitcher-warn-void:active { opacity: 0.8; }
+    .pick-voided-overlay {
+      position: absolute; inset: 0; border-radius: inherit;
+      background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center;
+      z-index: 10; border-radius: 16px;
+    }
+    .pick-voided-badge {
+      background: #ff4444; color: #fff; font-size: 22px; font-weight: 900;
+      padding: 10px 28px; border-radius: 10px; letter-spacing: 2px;
+      transform: rotate(-8deg);
+    }
 
     /* ERA section */
     .era-section {
@@ -1350,6 +1374,35 @@ function generateReasoning(p) {
   return `${s1}${s2}${sForm}${sOdds}${s3}<div class="rd-verdict"><div class="rd-verdict-title">📋 Verdict</div><div class="rd-verdict-text">${verdictText}</div></div>`;
 }
 
+async function voidPick(awayTeam, homeTeam, btn) {
+  if(!confirm('Void this pick? It will be marked as VOID and excluded from your record.')) return;
+  btn.textContent = 'Voiding…'; btn.disabled = true;
+  try {
+    const resp = await fetch('/api/void_pick', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-API-Secret':'mlbpicks2026'},
+      body: JSON.stringify({away_team: awayTeam, home_team: homeTeam})
+    });
+    const d = await resp.json();
+    if(d.ok) {
+      // Show voided overlay on the card
+      const cardId = `pick-card-${awayTeam.replace(/\s/g,'-')}-${homeTeam.replace(/\s/g,'-')}`;
+      const card = document.getElementById(cardId);
+      if(card) {
+        const overlay = document.createElement('div');
+        overlay.className = 'pick-voided-overlay';
+        overlay.innerHTML = '<div class="pick-voided-badge">VOIDED</div>';
+        card.appendChild(overlay);
+      }
+      btn.textContent = '✓ Voided';
+    } else {
+      btn.textContent = 'Error — try again'; btn.disabled = false;
+    }
+  } catch(e) {
+    btn.textContent = 'Error — try again'; btn.disabled = false;
+  }
+}
+
 function toggleReasoning(id) {
   const btn=document.getElementById(`rb-${id}`);
   const body=document.getElementById(`rd-${id}`);
@@ -1684,8 +1737,9 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
       <div class="pitcher-warn">
         <div class="pitcher-warn-icon">🚨</div>
         <div class="pitcher-warn-body">
-          <div class="pitcher-warn-title">PITCHER ALERT — VERIFY BEFORE BETTING</div>
+          <div class="pitcher-warn-title">⛔ Pitcher Alert — Do Not Bet</div>
           <div class="pitcher-warn-text">${w.replace('🚨 ','')}</div>
+          <button class="pitcher-warn-void" onclick="voidPick('${p.away_team}','${p.home_team}',this)">VOID THIS PICK</button>
         </div>
       </div>`).join('');
     const lineupWarnHTML = (hitterWarns.length
@@ -1710,7 +1764,7 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
     const homeL3  =p.home_recent_era!=null?`<span class="era-l3"> · L3: ${p.home_recent_era.toFixed(2)}</span>`:'';
 
     return `
-      <div class="pick-card${isElite?' elite-glow':''}">
+      <div class="pick-card${isElite?' elite-glow':''}" id="pick-card-${p.away_team.replace(/\s/g,'-')}-${p.home_team.replace(/\s/g,'-')}" style="position:relative">
         <div class="pick-card-accent"></div>
         <div class="pick-card-body">
 
