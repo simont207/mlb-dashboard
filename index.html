@@ -312,6 +312,18 @@
       color: #ff7070; margin-bottom: 10px; line-height: 1.45;
     }
     .lineup-warn strong { color: #ff4444; }
+    .pitcher-warn {
+      background: rgba(255,68,68,0.15);
+      border: 2px solid #ff4444;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .pitcher-warn-icon { font-size: 22px; flex-shrink: 0; line-height: 1; }
+    .pitcher-warn-body { flex: 1; }
+    .pitcher-warn-title { font-size: 13px; font-weight: 800; color: #ff4444; margin-bottom: 3px; letter-spacing: 0.2px; }
+    .pitcher-warn-text  { font-size: 12px; color: #ff7070; line-height: 1.4; }
 
     /* ERA section */
     .era-section {
@@ -1666,8 +1678,19 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
     const reasoningHTML=generateReasoning(p);
     const pickKey  =`${p.away_team}|${p.home_team}`;
     const warns    =lineupWarnings[pickKey]||[];
-    const lineupWarnHTML=warns.length
-      ?`<div class="lineup-warn">🚨 <strong>KEY PLAYERS OUT:</strong> ${warns.join(' &nbsp;·&nbsp; ')}</div>`:'';
+    const pitcherWarns = warns.filter(w=>w.startsWith('🚨 PITCHER'));
+    const hitterWarns  = warns.filter(w=>!w.startsWith('🚨 PITCHER'));
+    const pitcherWarnHTML = pitcherWarns.map(w=>`
+      <div class="pitcher-warn">
+        <div class="pitcher-warn-icon">🚨</div>
+        <div class="pitcher-warn-body">
+          <div class="pitcher-warn-title">PITCHER ALERT — VERIFY BEFORE BETTING</div>
+          <div class="pitcher-warn-text">${w.replace('🚨 ','')}</div>
+        </div>
+      </div>`).join('');
+    const lineupWarnHTML = (hitterWarns.length
+      ?`<div class="lineup-warn">🚨 <strong>KEY PLAYERS OUT:</strong> ${hitterWarns.join(' &nbsp;·&nbsp; ')}</div>`:'')
+      + pitcherWarnHTML;
 
     const game        =findGame(games,p.away_team,p.home_team);
     const statusChip  =buildStatusChip(game);
