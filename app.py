@@ -293,6 +293,7 @@ def api_record():
 
     for row in rows:
         r     = (row.get("result") or "").strip().upper()
+        if r == "V": continue   # voided picks excluded from record
         units = get_units(row.get("margin"))
         bet   = 100 * units
         if r == "W":
@@ -388,6 +389,7 @@ def api_chart():
 
     for row in rows:
         r     = (row.get("result") or "").strip().upper()
+        if r == "V": continue   # voided picks excluded from chart
         units = get_units(row.get("margin"))
         bet   = 100 * units
         if r == "W":
@@ -926,6 +928,20 @@ def api_check_results():
     })
 
 
+# ── Void a pick ──────────────────────────────────────────────────────────────────
+@app.route("/api/void_pick", methods=["POST"])
+@require_api_secret
+def api_void_pick():
+    data      = request.get_json(force=True, silent=True) or {}
+    away_team = data.get("away_team", "")
+    home_team = data.get("home_team", "")
+    today     = date.today().isoformat()
+    if not away_team or not home_team:
+        return jsonify({"ok": False, "error": "Missing teams"}), 400
+    supabase.table("picks").update({"result": "V"}).eq("date", today).eq("away_team", away_team).eq("home_team", home_team).execute()
+    return jsonify({"ok": True})
+
+
 # ── Push notifications ────────────────────────────────────────────────────────────
 @app.route("/api/push/subscribe", methods=["POST"])
 def api_push_subscribe():
@@ -1029,4 +1045,3 @@ def debug_info():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
-
