@@ -935,10 +935,10 @@ def api_void_pick():
     data      = request.get_json(force=True, silent=True) or {}
     away_team = data.get("away_team", "")
     home_team = data.get("home_team", "")
-    today     = date.today().isoformat()
+    pick_date = data.get("date") or date.today().isoformat()
     if not away_team or not home_team:
         return jsonify({"ok": False, "error": "Missing teams"}), 400
-    supabase.table("picks").update({"result": "V"}).eq("date", today).eq("away_team", away_team).eq("home_team", home_team).execute()
+    supabase.table("picks").update({"result": "V"}).eq("date", pick_date).eq("away_team", away_team).eq("home_team", home_team).execute()
     return jsonify({"ok": True})
 
 
