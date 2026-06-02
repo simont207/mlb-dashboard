@@ -615,6 +615,7 @@
     .result-pill.win  { background: rgba(0,230,118,0.12); color: var(--win);  border: 1px solid rgba(0,179,89,0.25); }
     .result-pill.loss { background: rgba(255,68,68,0.10);  color: var(--loss); border: 1px solid rgba(255,68,68,0.22); }
     .result-pill.push { background: rgba(136,136,136,0.1); color: var(--push); border: 1px solid rgba(136,136,136,0.2); }
+    .result-pill.void { background: rgba(255,68,68,0.08); color: #ff4444; border: 1px solid rgba(255,68,68,0.25); text-decoration: line-through; }
 
     /* ── Win/loss glow on record numbers ── */
     .wlp-item.win  .wlp-num { text-shadow: 0 0 28px rgba(0,230,118,0.35); }
@@ -1952,8 +1953,8 @@ function renderHistory(picks){
   if(!picks.length)return`<div class="empty"><div class="big">📜</div><p>No pick history yet</p></div>`;
   const rows=picks.map(p=>{
     const r=(p.result||'').toUpperCase();
-    const pillCls=r==='W'?'win':r==='L'?'loss':'push';
-    const pillLabel=r==='W'?'W':r==='L'?'L':r==='P'?'P':'—';
+    const pillCls=r==='W'?'win':r==='L'?'loss':r==='P'?'push':r==='V'?'void':'push';
+    const pillLabel=r==='W'?'W':r==='L'?'L':r==='P'?'P':r==='V'?'VOID':'—';
     const resultCell=r?`<span class="result-pill ${pillCls}">${pillLabel}</span>`:'<span style="color:var(--muted)">—</span>';
     const margin=p.margin!=null?p.margin.toFixed(2):'—';
     const odds=toDecimalOdds(p.pick_odds)||'—';
