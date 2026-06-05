@@ -1277,7 +1277,7 @@ function generateReasoning(p) {
       <div class="rd-gauge-wrap"><div class="rd-gauge-bar" style="width:${gaugeWidth}%"></div></div>
       <div class="rd-edge-desc">Qualifying threshold: 1.00 &nbsp;·&nbsp; This pick scored <strong>${edge.toFixed(2)}</strong></div>
     </div>
-    <div class="rd-line good">🧠 <strong>${pickedLast} ML</strong> selected — model probability exceeds market line by a measurable, qualifying edge</div>
+    <div class="rd-line good">🧠 <strong>${pickedLast} F5 ML</strong> selected — model probability exceeds market line by a measurable, qualifying edge</div>
     ${valueStr}
     <div class="rd-line ${edge>=1.5?'good':'neutral'}">📐 Edge <strong>${edge.toFixed(2)}</strong> — ${edge>=2.0?'high-conviction play, strong position sizing appropriate':edge>=1.5?'confident play, edge is well clear of threshold':'qualifying play — minimum edge requirement cleared, standard sizing'}</div>
     ${botRecordHtml}
@@ -1367,9 +1367,9 @@ function generateReasoning(p) {
 
   let verdictText;
   const recordCtx = tierWPct!==null?` The bot is <strong>${tierW}-${tierL} (${tierWPct}%)</strong> on similar edge plays this season.`:'';
-  if(edge>=2.0) verdictText=`The model carries <strong>very high conviction</strong> on <strong>${pickedLast} ML</strong>. An edge of ${edge.toFixed(2)} sits well above the qualifying threshold — this is among the strongest plays of the day. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
-  else if(edge>=1.5) verdictText=`<strong>${pickedLast} ML</strong> is a confident play. The edge of ${edge.toFixed(2)} clears the threshold comfortably, with the model's win probability outpacing market pricing. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
-  else verdictText=`<strong>${pickedLast} ML</strong> qualifies on model edge at ${edge.toFixed(2)}. The model detects value the market hasn't fully priced. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
+  if(edge>=2.0) verdictText=`The model carries <strong>very high conviction</strong> on <strong>${pickedLast} F5 ML</strong>. An edge of ${edge.toFixed(2)} sits well above the qualifying threshold — this is among the strongest plays of the day. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
+  else if(edge>=1.5) verdictText=`<strong>${pickedLast} F5 ML</strong> is a confident play. The edge of ${edge.toFixed(2)} clears the threshold comfortably, with the model's win probability outpacing market pricing. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
+  else verdictText=`<strong>${pickedLast} F5 ML</strong> qualifies on model edge at ${edge.toFixed(2)}. The model detects value the market hasn't fully priced. Recommended sizing: <strong>${betUnits}</strong>.${recordCtx}`;
 
   const sOdds = buildLineComparison(p);
   return `${s1}${s2}${sForm}${sOdds}${s3}<div class="rd-verdict"><div class="rd-verdict-title">📋 Verdict</div><div class="rd-verdict-text">${verdictText}</div></div>`;
@@ -1798,7 +1798,7 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
           ${liveScoreBar}
 
           <div class="pick-winner-row">
-            <div class="pick-winner-line">✅ ${p.pick.split(' ').pop()} ML ${oddsStr}</div>
+            <div class="pick-winner-line">✅ ${p.pick.split(' ').pop()} F5 ML ${oddsStr}</div>
             ${buildEdgeRing(edge)}
           </div>
 
