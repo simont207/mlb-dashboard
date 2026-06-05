@@ -230,6 +230,31 @@
       width: fit-content;
     }
 
+    /* Strong play — edge ≥ 1.25 */
+    .pick-card.strong-play {
+      border-color: rgba(255,160,0,0.5);
+      box-shadow: 0 0 0 1px rgba(255,160,0,0.3), 0 0 20px rgba(255,160,0,0.12);
+    }
+    .pick-card.strong-play .pick-card-accent {
+      background: linear-gradient(180deg, #ff9800, #ffd600, #ff9800);
+      background-size: 100% 200%;
+      animation: accent-slide 2s linear infinite;
+    }
+    @keyframes strong-pulse {
+      0%,100% { box-shadow: 0 0 0 1px rgba(255,160,0,0.3), 0 0 18px rgba(255,160,0,0.10); }
+      50%      { box-shadow: 0 0 0 1px rgba(255,160,0,0.5), 0 0 28px rgba(255,160,0,0.22); }
+    }
+    .pick-card.strong-play { animation: strong-pulse 3s ease-in-out infinite; }
+    .strong-banner {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 900; letter-spacing: 1px;
+      text-transform: uppercase; color: #ff9800;
+      background: rgba(255,152,0,0.12); border: 1px solid rgba(255,152,0,0.35);
+      border-radius: 20px; padding: 4px 12px; margin-bottom: 10px;
+      width: fit-content;
+    }
+    .strong-banner-icon { animation: icon-flash 1.5s ease-in-out infinite; display:inline-block; }
+
     /* Game over banner */
     .game-over-banner {
       border-radius: 8px; padding: 8px 12px;
@@ -1728,6 +1753,7 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
     const edgePct  =Math.min((p.margin||0)/3.0*100,100).toFixed(1);
     const edge     =p.margin||0;
     const isElite  =edge>=2.0;
+    const isStrong =edge>=1.25 && !isElite;
     const isPotd   =i===0;
     const reasoningHTML=generateReasoning(p);
     const pickKey  =`${p.away_team}|${p.home_team}`;
@@ -1765,11 +1791,13 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
     const homeL3  =p.home_recent_era!=null?`<span class="era-l3"> · L3: ${p.home_recent_era.toFixed(2)}</span>`:'';
 
     return `
-      <div class="pick-card${isElite?' elite-glow':''}" id="pick-card-${p.away_team.replace(/\s/g,'-')}-${p.home_team.replace(/\s/g,'-')}" style="position:relative">
+      <div class="pick-card${isElite?' elite-glow':isStrong?' strong-play':''}" id="pick-card-${p.away_team.replace(/\s/g,'-')}-${p.home_team.replace(/\s/g,'-')}" style="position:relative">
         <div class="pick-card-accent"></div>
         <div class="pick-card-body">
 
           ${isPotd?`<div class="potd-crown">👑 Pick of the Day</div>`:''}
+          ${isStrong?`<div class="strong-banner"><span class="strong-banner-icon">🔥</span> Strong Play — 2 units</div>`:''}
+          ${isElite?`<div class="strong-banner" style="color:#00e676;background:rgba(0,230,118,0.1);border-color:rgba(0,230,118,0.35)"><span class="strong-banner-icon">💪</span> Elite Play — 2.5 units</div>`:''}
           ${gameOverBanner}
 
           <div class="matchup-logos">
