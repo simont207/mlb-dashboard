@@ -1828,38 +1828,87 @@ function animateEdgeRings() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   CACHE HELPERS (localStorage with TTL)
+══════════════════════════════════════════════════════════════════════ */
+function _cacheSet(key, data, ttlMs) {
+  try { localStorage.setItem(key, JSON.stringify({data, exp: Date.now() + ttlMs})); } catch(e) {}
+}
+function _cacheGet(key) {
+  try {
+    const v = JSON.parse(localStorage.getItem(key));
+    if (v && v.exp > Date.now()) return v.data;
+  } catch(e) {}
+  return null;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    TODAY TAB
 ══════════════════════════════════════════════════════════════════════ */
 async function loadToday(){
-  setPanel('panel-today',skeleton());
-  try{
-    const [picks, recData]  = await Promise.all([fetchJSON('/api/today'), fetchJSON('/api/record')]);
-    const {ticker,games}    = await loadLiveScores(picks);
-    if (games.some(g => g?.status?.abstractGameState === 'Live')) startLiveRefresh();
-    const lineupWarnings    = await loadLineupWarnings(picks);
-    updateTodayTabBadge(games);
-    // Load team stats in background — re-render Today panel when ready
-    fetchJSON(`/api/team_stats?secret=mlbpicks2026`).then(d=>{
-      if(d&&d.teams){
-        teamStats=d.teams;
-        setPanel('panel-today', renderToday(picks,ticker,lineupWarnings,games,recData));
-        animateEdgeBars(); animateEdgeRings(); updateCountdowns();
-      }
-    }).catch(()=>{});
-    fetchJSON(`/api/odds`).then(d=>{
-      if(d&&d.games){
-        oddsData=d.games;
-        setPanel('panel-today', renderToday(picks,ticker,lineupWarnings,games,recData));
-        animateEdgeBars(); animateEdgeRings(); updateCountdowns();
-      }
-    }).catch(()=>{});
-    setPanel('panel-today', renderToday(picks, ticker, lineupWarnings, games, recData));
-    animateEdgeBars();
-    animateEdgeRings();
-    updateCountdowns();
+  // ── Step 1: Show cached picks instantly (no spinner flash) ──────────
+  const cachedPicks  = _cacheGet('cache_picks');
+  const cachedRecord = _cacheGet('cache_record');
+  if (cachedPicks) {
+    setPanel('panel-today', renderToday(cachedPicks, '', {}, [], cachedRecord));
+    animateEdgeBars(); animateEdgeRings(); updateCountdowns();
+  } else {
+    setPanel('panel-today', skeleton());
+  }
+
+  try {
+    // ── Step 2: Fetch picks + record in parallel ─────────────────────
+    const [picks, recData] = await Promise.all([
+      fetchJSON('/api/today'),
+      fetchJSON('/api/record'),
+    ]);
+    _cacheSet('cache_picks',  picks,   10 * 60 * 1000);
+    _cacheSet('cache_record', recData, 30 * 60 * 1000);
+
+    // ── Step 3: Render picks immediately — no waiting ─────────────────
+    setPanel('panel-today', renderToday(picks, '', {}, [], recData));
+    animateEdgeBars(); animateEdgeRings(); updateCountdowns();
     maybeNotify(picks);
-  }catch(e){
-    setPanel('panel-today',`<div class="empty"><p>Failed to load: ${e.message}</p></div>`);
+
+    // ── Step 4: Load everything else in parallel in background ────────
+    const rerender = (extra={}) => {
+      setPanel('panel-today', renderToday(picks, extra.ticker||'', extra.warnings||{}, extra.games||[], recData));
+      animateEdgeBars(); animateEdgeRings(); updateCountdowns();
+    };
+
+    let ticker='', games=[], lineupWarnings={};
+
+    // Live scores
+    loadLiveScores(picks).then(({ticker:t, games:g}) => {
+      ticker = t; games = g;
+      if (g.some(x => x?.status?.abstractGameState==='Live')) startLiveRefresh();
+      updateTodayTabBadge(g);
+      rerender({ticker, games, warnings: lineupWarnings});
+    }).catch(()=>{});
+
+    // Lineup warnings
+    loadLineupWarnings(picks).then(w => {
+      lineupWarnings = w;
+      rerender({ticker, games, warnings: lineupWarnings});
+    }).catch(()=>{});
+
+    // Team stats
+    fetchJSON('/api/team_stats?secret=mlbpicks2026').then(d => {
+      if (d?.teams) {
+        teamStats = d.teams;
+        rerender({ticker, games, warnings: lineupWarnings});
+      }
+    }).catch(()=>{});
+
+    // Odds
+    fetchJSON('/api/odds').then(d => {
+      if (d?.games) {
+        oddsData = d.games;
+        rerender({ticker, games, warnings: lineupWarnings});
+      }
+    }).catch(()=>{});
+
+  } catch(e) {
+    setPanel('panel-today', `<div class="empty"><p>Failed to load: ${e.message}</p></div>`);
   }
 }
 
