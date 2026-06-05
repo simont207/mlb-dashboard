@@ -1977,6 +1977,14 @@ async function loadHistory(){
   catch(e){setPanel('panel-history',`<div class="empty"><p>Failed to load: ${e.message}</p></div>`);}
 }
 
+function getUnits(margin){
+  if(margin==null)return 1;
+  if(margin>=2.5)return 2.5;
+  if(margin>=2.0)return 2;
+  if(margin>=1.5)return 1.5;
+  return 1;
+}
+
 function renderHistory(picks){
   if(!picks.length)return`<div class="empty"><div class="big">📜</div><p>No pick history yet</p></div>`;
   const rows=picks.map(p=>{
@@ -1984,15 +1992,17 @@ function renderHistory(picks){
     const pillCls=r==='W'?'win':r==='L'?'loss':r==='P'?'push':r==='V'?'void':'push';
     const pillLabel=r==='W'?'W':r==='L'?'L':r==='P'?'P':r==='V'?'VOID':'—';
     const resultCell=r?`<span class="result-pill ${pillCls}">${pillLabel}</span>`:'<span style="color:var(--muted)">—</span>';
-    const margin=p.margin!=null?p.margin.toFixed(2):'—';
     const odds=toDecimalOdds(p.pick_odds)||'—';
+    const units=getUnits(p.margin);
+    const unitColor=units>=2?'#ffd600':units>=1.5?'#ff9800':'var(--muted)';
+    const unitCell=`<span style="font-size:11px;font-weight:700;color:${unitColor}">${units}u</span>`;
     const lA=logoUrl(p.away_team),lH=logoUrl(p.home_team);
     const imgA=lA?`<img src="${lA}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`:'';
     const imgH=lH?`<img src="${lH}" style="width:13px;height:13px;object-fit:contain;vertical-align:middle;margin-right:2px" onerror="this.style.display='none'">`:'';
     const gQuery=encodeURIComponent(`${p.away_team} vs ${p.home_team} ${p.date} MLB`);
-    return`<tr style="cursor:pointer" onclick="window.open('https://www.google.com/search?q=${gQuery}','_blank')" title="Search this game on Google"><td>${formatDate(p.date)}</td><td>${imgA}${abbrev(p.away_team)} @ ${imgH}${abbrev(p.home_team)}</td><td>${abbrev(p.pick)}</td><td>${odds}</td><td>${margin}</td><td>${resultCell}</td></tr>`;
+    return`<tr style="cursor:pointer" onclick="window.open('https://www.google.com/search?q=${gQuery}','_blank')" title="Search this game on Google"><td>${formatDate(p.date)}</td><td>${imgA}${abbrev(p.away_team)} @ ${imgH}${abbrev(p.home_team)}</td><td>${abbrev(p.pick)}</td><td>${odds}</td><td>${unitCell}</td><td>${resultCell}</td></tr>`;
   }).join('');
-  return`<div class="hist-table-wrap"><table><thead><tr><th>Date</th><th>Matchup</th><th>Pick</th><th>Odds</th><th>Edge</th><th>Result</th><th style="font-size:10px;color:var(--muted);font-weight:400">tap to view recap ↗</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return`<div class="hist-table-wrap"><table><thead><tr><th>Date</th><th>Matchup</th><th>Pick</th><th>Odds</th><th>Units</th><th>Result</th><th style="font-size:10px;color:var(--muted);font-weight:400">tap ↗</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 /* ══════════════════════════════════════════════════════════════════════
