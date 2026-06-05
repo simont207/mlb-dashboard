@@ -802,7 +802,7 @@ def api_yesterday_results():
     picks_resp = supabase.table("picks").select("*").eq("date", target_date).execute()
     picks = [p for p in (picks_resp.data or []) if not (p.get("result") or "").strip()]
 
-    # Build final scores
+    # Build F5 scores (first 5 innings only)
     final_games = {}
     for date_entry in mlb_data.get("dates", []):
         for game in date_entry.get("games", []):
@@ -813,8 +813,8 @@ def api_yesterday_results():
                 continue
             away = game["teams"]["away"]["team"]["name"]
             home = game["teams"]["home"]["team"]["name"]
-            away_runs = sum(i.get("away", {}).get("runs", 0) for i in innings)
-            home_runs = sum(i.get("home", {}).get("runs", 0) for i in innings)
+            away_runs = sum(i.get("away", {}).get("runs", 0) for i in innings[:5])
+            home_runs = sum(i.get("home", {}).get("runs", 0) for i in innings[:5])
             final_games[(away, home)] = away if away_runs > home_runs else (home if home_runs > away_runs else "TIE")
 
     # Update results in Supabase
@@ -872,19 +872,18 @@ def api_check_results():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 502
 
-    # 3. Build final scores dict keyed by (away, home)
+    # 3. Build F5 scores dict keyed by (away, home)
+    # F5 = first 5 innings result (requires 5 complete innings)
     final_games = {}
     for date_entry in mlb_data.get("dates", []):
         for game in date_entry.get("games", []):
-            if game.get("status", {}).get("abstractGameState") != "Final":
-                continue
             innings = game.get("linescore", {}).get("innings", [])
             if len(innings) < 5:
-                continue
+                continue   # F5 not complete yet
             away      = game["teams"]["away"]["team"]["name"]
             home      = game["teams"]["home"]["team"]["name"]
-            away_runs = sum(i.get("away", {}).get("runs", 0) for i in innings)
-            home_runs = sum(i.get("home", {}).get("runs", 0) for i in innings)
+            away_runs = sum(i.get("away", {}).get("runs", 0) for i in innings[:5])
+            home_runs = sum(i.get("home", {}).get("runs", 0) for i in innings[:5])
             if away_runs > home_runs:
                 final_games[(away, home)] = away
             elif home_runs > away_runs:
