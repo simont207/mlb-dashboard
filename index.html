@@ -301,15 +301,44 @@
     .park-badge.pitcher { background: rgba(100,180,255,0.12); color: #64b5f6; border: 1px solid rgba(100,180,255,0.25); }
 
     /* Live score bar on card */
-    .live-score-bar {
-      background: rgba(255,68,68,0.07); border: 1px solid rgba(255,68,68,0.2);
-      border-radius: 8px; padding: 7px 10px; margin-bottom: 10px;
-      display: flex; align-items: center; justify-content: space-between;
-      font-size: 11px;
+    /* ── Live F5 Scoreboard ── */
+    .f5-scoreboard {
+      background: rgba(255,68,68,0.06); border: 1px solid rgba(255,68,68,0.22);
+      border-radius: 10px; padding: 10px 12px; margin-bottom: 10px;
     }
-    .live-score-bar .lsb-status { color: #ff6b6b; font-weight: 800; }
-    .live-score-bar .lsb-score  { color: var(--text); font-weight: 700; }
-    .live-score-bar strong       { font-size: 14px; }
+    .f5-sb-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .f5-sb-live { font-size: 11px; font-weight: 800; color: #ff4444; display: flex; align-items: center; gap: 5px; }
+    @keyframes live-blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .f5-sb-dot { width:7px;height:7px;border-radius:50%;background:#ff4444;animation:live-blink 1.2s ease-in-out infinite;flex-shrink:0; }
+    .f5-sb-f5tag { font-size:10px;font-weight:700;color:var(--muted);background:var(--surface2);border-radius:4px;padding:2px 6px; }
+    .f5-sb-grid {
+      display: grid;
+      grid-template-columns: 56px repeat(9, 1fr);
+      gap: 2px; font-size: 10px;
+    }
+    .f5-sb-cell {
+      text-align: center; padding: 3px 0; border-radius: 3px;
+      font-weight: 600; color: var(--muted); min-width: 0;
+    }
+    .f5-sb-cell.team-name { text-align: left; font-size: 10px; font-weight: 700; color: var(--text); padding-left: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .f5-sb-cell.inn-num   { color: var(--muted); font-size: 9px; font-weight: 600; }
+    .f5-sb-cell.f5-zone   { background: rgba(0,230,118,0.06); }
+    .f5-sb-cell.current-inn { background: rgba(255,68,68,0.15); color: #ff6b6b; font-weight: 800; }
+    .f5-sb-cell.runs       { color: var(--text); font-weight: 700; }
+    .f5-sb-cell.blank      { color: var(--border); }
+    .f5-sb-divider { grid-column: 1/-1; height: 1px; background: var(--border); margin: 2px 0; }
+    .f5-sb-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border);
+    }
+    .f5-sb-total { font-size: 13px; font-weight: 800; }
+    .f5-sb-total.winning { color: var(--win); }
+    .f5-sb-total.losing  { color: var(--loss); }
+    .f5-sb-total.tied    { color: var(--muted); }
+    .f5-sb-status-txt    { font-size: 11px; color: var(--muted); }
 
     /* Pick line */
     .pick-winner-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -1118,21 +1147,84 @@ function buildStatusChip(game) {
   return `<span class="countdown-el status-chip" data-gametime="${gd}">⏱️ …</span>`;
 }
 
-function buildLiveScoreBar(game) {
+function buildLiveScoreBar(game, pickedTeam) {
   if (!game) return '';
   const state = game.status?.abstractGameState;
   if (state !== 'Live') return '';
-  const awayAbb = (game.teams?.away?.team?.name||'').split(' ').pop();
-  const homeAbb = (game.teams?.home?.team?.name||'').split(' ').pop();
-  const awayR   = game.linescore?.teams?.away?.runs ?? '–';
-  const homeR   = game.linescore?.teams?.home?.runs ?? '–';
-  const inning  = game.linescore?.currentInning || '';
-  const half    = game.linescore?.inningHalf || '';
-  const halfIcon= half==='Top'?'▲':'▼';
+
+  const awayName   = game.teams?.away?.team?.name || '';
+  const homeName   = game.teams?.home?.team?.name || '';
+  const awayAbb    = awayName.split(' ').pop();
+  const homeAbb    = homeName.split(' ').pop();
+  const curInning  = game.linescore?.currentInning || 0;
+  const half       = game.linescore?.inningHalf || '';
+  const halfIcon   = half === 'Top' ? '▲' : '▼';
+  const innings    = game.linescore?.innings || [];
+
+  // Build inning columns (show 1-9 minimum)
+  const maxInnings = Math.max(9, curInning);
+  const innHeaders = ['<div class="f5-sb-cell inn-num"></div>'];
+  const awayRow    = ['<div class="f5-sb-cell team-name">' + awayAbb + '</div>'];
+  const homeRow    = ['<div class="f5-sb-cell team-name">' + homeAbb + '</div>'];
+
+  for (let i = 1; i <= maxInnings; i++) {
+    const inn     = innings[i - 1];
+    const isCur   = i === curInning;
+    const isF5    = i <= 5;
+    const baseCls = `f5-sb-cell ${isF5 ? 'f5-zone' : ''} ${isCur ? 'current-inn' : ''}`;
+
+    innHeaders.push(`<div class="${baseCls} inn-num">${i}</div>`);
+
+    if (inn) {
+      const ar = inn.away?.runs ?? '–';
+      const hr = inn.home?.runs ?? '–';
+      awayRow.push(`<div class="${baseCls} runs">${ar}</div>`);
+      homeRow.push(`<div class="${baseCls} runs">${hr}</div>`);
+    } else {
+      awayRow.push(`<div class="${baseCls} blank">·</div>`);
+      homeRow.push(`<div class="${baseCls} blank">·</div>`);
+    }
+  }
+
+  // F5 subtotals
+  const completedF5 = innings.slice(0, 5);
+  const awayF5 = completedF5.reduce((s, i) => s + (i?.away?.runs || 0), 0);
+  const homeF5 = completedF5.reduce((s, i) => s + (i?.home?.runs || 0), 0);
+  const f5Done = completedF5.length >= 5;
+
+  // Determine if pick is winning F5
+  let pickIsAway = pickedTeam === awayName;
+  let pickF5 = pickIsAway ? awayF5 : homeF5;
+  let oppF5  = pickIsAway ? homeF5  : awayF5;
+  let pickAbb= pickIsAway ? awayAbb : homeAbb;
+  let oppAbb = pickIsAway ? homeAbb : awayAbb;
+
+  let statusCls = 'tied', statusTxt = '';
+  if (f5Done) {
+    if (pickF5 > oppF5)       { statusCls = 'winning'; statusTxt = `✅ F5 WIN — ${pickAbb} ${pickF5}–${oppF5} ${oppAbb}`; }
+    else if (pickF5 < oppF5)  { statusCls = 'losing';  statusTxt = `❌ F5 LOSS — ${pickAbb} ${pickF5}–${oppF5} ${oppAbb}`; }
+    else                       { statusCls = 'tied';    statusTxt = `➖ F5 TIED — ${pickF5}–${oppF5}`; }
+  } else {
+    if (pickF5 > oppF5)       { statusCls = 'winning'; statusTxt = `🔥 Winning F5 — ${pickAbb} ${pickF5}–${oppF5} ${oppAbb}`; }
+    else if (pickF5 < oppF5)  { statusCls = 'losing';  statusTxt = `⬇️ Trailing F5 — ${pickAbb} ${pickF5}–${oppF5} ${oppAbb}`; }
+    else                       { statusCls = 'tied';    statusTxt = `Tied ${pickF5}–${oppF5} after ${completedF5.length} inn`; }
+  }
+
   return `
-    <div class="live-score-bar">
-      <span class="lsb-status">🔴 ${halfIcon}${inning}</span>
-      <span class="lsb-score">${awayAbb} <strong>${awayR}</strong> – <strong>${homeR}</strong> ${homeAbb}</span>
+    <div class="f5-scoreboard">
+      <div class="f5-sb-header">
+        <div class="f5-sb-live"><div class="f5-sb-dot"></div>LIVE ${halfIcon}${curInning}</div>
+        <div class="f5-sb-f5tag">F5 ZONE: inn 1–5</div>
+      </div>
+      <div class="f5-sb-grid">
+        ${innHeaders.join('')}
+        <div class="f5-sb-divider"></div>
+        ${awayRow.join('')}
+        ${homeRow.join('')}
+      </div>
+      <div class="f5-sb-footer">
+        <div class="f5-sb-total ${statusCls}">${statusTxt}</div>
+      </div>
     </div>`;
 }
 
@@ -1699,6 +1791,7 @@ async function loadToday(){
   try{
     const [picks, recData]  = await Promise.all([fetchJSON('/api/today'), fetchJSON('/api/record')]);
     const {ticker,games}    = await loadLiveScores(picks);
+    if (games.some(g => g?.status?.abstractGameState === 'Live')) startLiveRefresh();
     const lineupWarnings    = await loadLineupWarnings(picks);
     updateTodayTabBadge(games);
     // Load team stats in background — re-render Today panel when ready
@@ -1775,7 +1868,7 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
 
     const game        =findGame(games,p.away_team,p.home_team);
     const statusChip  =buildStatusChip(game);
-    const liveScoreBar=buildLiveScoreBar(game);
+    const liveScoreBar=buildLiveScoreBar(game, p.pick);
     const gameOverBanner=buildGameOverBanner(game,p.pick);
     const parkBadge   =getParkBadge(p.home_team);
 
@@ -2024,7 +2117,35 @@ function refreshAll(){
 }
 
 refreshAll();
-setInterval(refreshAll,REFRESH);
+setInterval(refreshAll, REFRESH);
+
+// ── Live game fast refresh (every 60s when games are in progress) ──────────
+let _liveTimer = null;
+function startLiveRefresh() {
+  if (_liveTimer) return;
+  _liveTimer = setInterval(async () => {
+    if (activeTab !== 'today') return;
+    // Only re-fetch live scores, not full reload
+    const picks = await fetchJSON('/api/today').catch(()=>[]);
+    const {ticker, games} = await loadLiveScores(picks);
+    const hasLive = games.some(g => g?.status?.abstractGameState === 'Live');
+    if (!hasLive) { stopLiveRefresh(); return; }
+    // Re-render today panel with fresh scores
+    const lineupWarnings = {};
+    const recData = null;
+    setPanel('panel-today', renderToday(picks, ticker, lineupWarnings, games, recData));
+    animateEdgeBars(); animateEdgeRings(); updateCountdowns();
+  }, 60000);
+}
+function stopLiveRefresh() {
+  if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; }
+}
+// Check after initial load if live games are running
+setTimeout(async () => {
+  const picks = await fetchJSON('/api/today').catch(()=>[]);
+  const {games} = await loadLiveScores(picks);
+  if (games.some(g => g?.status?.abstractGameState === 'Live')) startLiveRefresh();
+}, 5000);
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/sw.js', {scope:'/'}).catch(e=>console.warn('SW reg failed:',e));
