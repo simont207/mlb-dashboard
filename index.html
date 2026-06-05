@@ -563,6 +563,33 @@
     .spinner { display: flex; justify-content: center; padding: 40px; }
     .spinner::after { content: ''; width: 30px; height: 30px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Skeleton loader ── */
+    @keyframes skeleton-shimmer {
+      0%   { background-position: -200% 0; }
+      100% { background-position:  200% 0; }
+    }
+    .skeleton-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 18px; margin-bottom: 12px; padding: 16px; overflow: hidden;
+    }
+    .skeleton-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .skeleton-circle { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(90deg,var(--surface2) 25%,var(--border) 50%,var(--surface2) 75%);
+      background-size: 200% 100%; animation: skeleton-shimmer 1.5s infinite; }
+    .skeleton-line {
+      border-radius: 6px; height: 11px;
+      background: linear-gradient(90deg,var(--surface2) 25%,var(--border) 50%,var(--surface2) 75%);
+      background-size: 200% 100%; animation: skeleton-shimmer 1.5s infinite;
+      margin-bottom: 9px;
+    }
+
+    /* ── Card slide-in stagger ── */
+    @keyframes cardFadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .pick-card-anim { animation: cardFadeUp 0.4s cubic-bezier(0.4,0,0.2,1) both; }
     .refresh-note { text-align: center; font-size: 11px; color: var(--muted); padding: 6px 0 10px; }
 
     /* ── iOS Safari fix ── */
@@ -1560,6 +1587,23 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 async function fetchJSON(url){const r=await fetch(url);if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}
 function spinner(){return '<div class="spinner"></div>';}
+function skeleton(){
+  const card=()=>`<div class="skeleton-card">
+    <div class="skeleton-row">
+      <div class="skeleton-circle"></div>
+      <div style="flex:1">
+        <div class="skeleton-line" style="width:55%"></div>
+        <div class="skeleton-line" style="width:35%"></div>
+      </div>
+      <div class="skeleton-circle" style="width:50px;height:50px;border-radius:50%"></div>
+      <div class="skeleton-circle" style="width:50px;height:50px;border-radius:50%"></div>
+    </div>
+    <div class="skeleton-line" style="width:70%"></div>
+    <div class="skeleton-line" style="width:45%"></div>
+    <div class="skeleton-line" style="width:80%"></div>
+  </div>`;
+  return card()+card();
+}
 function setPanel(id,h){document.getElementById(id).innerHTML=h;}
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -1787,7 +1831,7 @@ function animateEdgeRings() {
    TODAY TAB
 ══════════════════════════════════════════════════════════════════════ */
 async function loadToday(){
-  setPanel('panel-today',spinner());
+  setPanel('panel-today',skeleton());
   try{
     const [picks, recData]  = await Promise.all([fetchJSON('/api/today'), fetchJSON('/api/record')]);
     const {ticker,games}    = await loadLiveScores(picks);
@@ -1884,7 +1928,7 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
     const homeL3  =p.home_recent_era!=null?`<span class="era-l3"> · L3: ${p.home_recent_era.toFixed(2)}</span>`:'';
 
     return `
-      <div class="pick-card${isElite?' elite-glow':isStrong?' strong-play':''}" id="pick-card-${p.away_team.replace(/\s/g,'-')}-${p.home_team.replace(/\s/g,'-')}" style="position:relative">
+      <div class="pick-card pick-card-anim${isElite?' elite-glow':isStrong?' strong-play':''}" id="pick-card-${p.away_team.replace(/\s/g,'-')}-${p.home_team.replace(/\s/g,'-')}" style="position:relative;animation-delay:${i*0.08}s">
         <div class="pick-card-accent"></div>
         <div class="pick-card-body">
 
@@ -2065,7 +2109,7 @@ function renderChart(points){
    HISTORY TAB
 ══════════════════════════════════════════════════════════════════════ */
 async function loadHistory(){
-  setPanel('panel-history',spinner());
+  setPanel('panel-history',skeleton());
   try{const picks=await fetchJSON('/api/picks');setPanel('panel-history',renderHistory(picks));}
   catch(e){setPanel('panel-history',`<div class="empty"><p>Failed to load: ${e.message}</p></div>`);}
 }
@@ -2205,6 +2249,40 @@ if('serviceWorker' in navigator){
     }
     startY = 0;
   }, { passive: true });
+})();
+
+/* ══════════════════════════════════════════════════════════════════════
+   SWIPE TO CHANGE TABS
+══════════════════════════════════════════════════════════════════════ */
+(function(){
+  const TABS = ['today','record','history'];
+  const content = document.querySelector('.content');
+  if (!content) return;
+  let sx=0, sy=0, sTime=0;
+
+  content.addEventListener('touchstart', e => {
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+    sTime = Date.now();
+  }, {passive:true});
+
+  content.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - sx;
+    const dy = e.changedTouches[0].clientY - sy;
+    const dt = Date.now() - sTime;
+    // Only register fast horizontal swipes (ignore slow scrolls & vertical swipes)
+    if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx) * 0.7 || dt > 400) return;
+    const cur = TABS.indexOf(activeTab);
+    if (dx < 0 && cur < TABS.length - 1) {
+      // Swipe left → next tab
+      haptic(8);
+      document.querySelector(`.tab-btn[data-tab="${TABS[cur+1]}"]`)?.click();
+    } else if (dx > 0 && cur > 0) {
+      // Swipe right → previous tab
+      haptic(8);
+      document.querySelector(`.tab-btn[data-tab="${TABS[cur-1]}"]`)?.click();
+    }
+  }, {passive:true});
 })();
 
 /* ══════════════════════════════════════════════════════════════════════
