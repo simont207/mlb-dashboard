@@ -25,7 +25,7 @@ self.addEventListener('notificationclick', event => {
     })
   );
 });
-const CACHE_NAME = 'mlb-picks-v8';
+const CACHE_NAME = 'mlb-picks-v9';
 
 // Assets to pre-cache (offline shell)
 const PRECACHE = [
