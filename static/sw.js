@@ -25,7 +25,7 @@ self.addEventListener('notificationclick', event => {
     })
   );
 });
-const CACHE_NAME = 'mlb-picks-v10';
+const CACHE_NAME = 'mlb-picks-v11';
 
 // Assets to pre-cache (offline shell)
 const PRECACHE = [
@@ -82,7 +82,21 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // App shell: cache-first, revalidate in background
+  // HTML pages: network-first so updates are always picked up immediately
+  if (event.request.mode === 'navigate' || url.pathname === '/') {
+    event.respondWith(
+      fetch(event.request)
+        .then(res => {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Static assets: cache-first, revalidate in background
   event.respondWith(
     caches.match(event.request).then(cached => {
       const network = fetch(event.request).then(res => {
