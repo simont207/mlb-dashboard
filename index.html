@@ -2269,20 +2269,15 @@ async function loadTomorrowPitchers() {
   const d = new Date(); d.setDate(d.getDate() + 1);
   const tmrw = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   try {
-    const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=${tmrw}&endDate=${tmrw}&hydrate=probablePitcher&gameType=R`;
-    const data = await fetch(url).then(r=>r.json());
-    const games = [];
-    for (const date of (data.dates||[])) {
-      for (const g of (date.games||[])) {
-        const awayTeam = g.teams?.away?.team?.name || '';
-        const homeTeam = g.teams?.home?.team?.name || '';
-        const awayP    = g.teams?.away?.probablePitcher?.fullName || 'TBD';
-        const homeP    = g.teams?.home?.probablePitcher?.fullName || 'TBD';
-        const gameTime = g.gameDate ? new Date(g.gameDate).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'}) : '';
-        games.push({ awayTeam, homeTeam, awayP, homeP, gameTime });
-      }
-    }
-    return games;
+    const data = await fetchJSON(`/api/todays_games?secret=mlbpicks2026&date=${tmrw}`);
+    if (!data?.games) return [];
+    return data.games.map(g => ({
+      awayTeam: g.away_name || '',
+      homeTeam: g.home_name || '',
+      awayP:    g.away_probable_pitcher || 'TBD',
+      homeP:    g.home_probable_pitcher || 'TBD',
+      gameTime: g.game_datetime ? new Date(g.game_datetime).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'}) + ' ET' : '',
+    }));
   } catch(e) { return []; }
 }
 
