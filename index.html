@@ -1309,8 +1309,11 @@ function buildGameOverBanner(game, pickedTeam) {
   if (game.status?.abstractGameState !== 'Final') return '';
   const awayName = game.teams?.away?.team?.name || '';
   const homeName = game.teams?.home?.team?.name || '';
-  const awayR    = game.linescore?.teams?.away?.runs ?? 0;
-  const homeR    = game.linescore?.teams?.home?.runs ?? 0;
+  // Use F5 (first 5 innings) not full game score
+  const innings  = game.linescore?.innings || [];
+  const f5       = innings.slice(0, 5);
+  const awayR    = f5.length === 5 ? f5.reduce((s,i) => s + (i.away?.runs ?? 0), 0) : (game.linescore?.teams?.away?.runs ?? 0);
+  const homeR    = f5.length === 5 ? f5.reduce((s,i) => s + (i.home?.runs ?? 0), 0) : (game.linescore?.teams?.home?.runs ?? 0);
   const awayAbb  = awayName.split(' ').pop();
   const homeAbb  = homeName.split(' ').pop();
   if (awayR === homeR) return `<div class="game-over-banner push">➖ FINAL: ${awayAbb} ${awayR} – ${homeR} ${homeAbb} · PUSH</div>`;
@@ -1462,8 +1465,8 @@ function generateReasoning(p) {
     : '';
 
   // ── Bet sizing recommendation ─────────────────────────────────────────────
-  const betUnits = edge>=2.5?'2.5 units':edge>=2.0?'2 units':edge>=1.5?'1.5 units':'1 unit';
-  const betNote  = edge>=2.5?'Maximum sizing — elite conviction':edge>=2.0?'Strong sizing — high conviction':edge>=1.5?'Confident sizing — solid edge':'Standard sizing — qualifying play';
+  const betUnits = edge>=2.0?'2.5 units':edge>=1.5?'2 units':edge>=1.25?'1.5 units':'1 unit';
+  const betNote  = edge>=2.0?'Maximum sizing — elite conviction':edge>=1.5?'Strong sizing — high conviction':edge>=1.25?'Confident sizing — solid edge':'Standard sizing — qualifying play';
   const gaugeWidth = Math.min(Math.round((edge-1.0)/2.0*100),100);
 
   const s1=`<div class="rd-section">
@@ -2028,7 +2031,8 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
     const edgePct  =Math.min((p.margin||0)/3.0*100,100).toFixed(1);
     const edge     =p.margin||0;
     const isElite  =edge>=2.0;
-    const isStrong =edge>=1.25 && !isElite;
+    const isStrong =edge>=1.5 && !isElite;
+    const isSolid  =edge>=1.25 && !isStrong && !isElite;
     const isPotd   =i===0;
     const reasoningHTML=generateReasoning(p);
     const pickKey  =`${p.away_team}|${p.home_team}`;
@@ -2071,6 +2075,7 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
         <div class="pick-card-body">
 
           ${isPotd?`<div class="potd-crown">👑 Pick of the Day</div>`:''}
+          ${isSolid?`<div class="strong-banner" style="color:#ffb300;background:rgba(255,179,0,0.1);border-color:rgba(255,179,0,0.35)"><span class="strong-banner-icon">⭐</span> Value Play — 1.5 units</div>`:''}
           ${isStrong?`<div class="strong-banner"><span class="strong-banner-icon">🔥</span> Strong Play — 2 units</div>`:''}
           ${isElite?`<div class="strong-banner" style="color:#00e676;background:rgba(0,230,118,0.1);border-color:rgba(0,230,118,0.35)"><span class="strong-banner-icon">💪</span> Elite Play — 2.5 units</div>`:''}
           ${gameOverBanner}
