@@ -230,6 +230,62 @@
       width: fit-content;
     }
 
+    /* ── Pick of the Day spotlight ── */
+    .pick-card.potd-spotlight {
+      border-color: rgba(255,215,0,0.5);
+      box-shadow: 0 0 0 1px rgba(255,215,0,0.3), 0 0 30px rgba(255,215,0,0.12), 0 12px 40px rgba(0,0,0,0.6);
+    }
+    .pick-card.potd-spotlight .pick-card-accent {
+      background: linear-gradient(180deg, #ffd700, #ffb300, #ffd700);
+      background-size: 100% 200%; animation: accent-slide 2s linear infinite; width: 5px;
+    }
+    @keyframes potd-glow {
+      0%,100% { box-shadow: 0 0 0 1px rgba(255,215,0,0.3), 0 0 22px rgba(255,215,0,0.10); }
+      50%      { box-shadow: 0 0 0 1px rgba(255,215,0,0.5), 0 0 35px rgba(255,215,0,0.22); }
+    }
+    .pick-card.potd-spotlight { animation: potd-glow 3s ease-in-out infinite; }
+    .potd-label {
+      font-size: 10px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase;
+      color: #ffd700; background: rgba(255,215,0,0.1); border: 1px solid rgba(255,215,0,0.35);
+      border-radius: 20px; padding: 4px 12px; margin-bottom: 10px; width: fit-content;
+      display: flex; align-items: center; gap: 5px;
+    }
+
+    /* ── Tomorrow's Pitchers ── */
+    .tmrw-section { margin-top: 16px; }
+    .tmrw-header {
+      font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+    }
+    .tmrw-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;
+    }
+    .tmrw-teams { flex: 1; }
+    .tmrw-matchup { font-size: 13px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+    .tmrw-pitchers { font-size: 11px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+    .tmrw-pitcher-name { color: var(--text); font-weight: 700; }
+    .tmrw-era { font-size: 10px; color: var(--muted); background: var(--surface2); border-radius: 4px; padding: 1px 5px; }
+    .tmrw-time { font-size: 11px; color: var(--muted); text-align: right; white-space: nowrap; }
+
+    /* ── Bankroll Tracker ── */
+    .bankroll-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 16px; margin-bottom: 10px;
+    }
+    .bankroll-card h3 { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+    .bankroll-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .bankroll-row:last-child { border-bottom: none; }
+    .bankroll-lbl { font-size: 12px; color: var(--muted); }
+    .bankroll-val { font-size: 15px; font-weight: 900; }
+    .bankroll-proj {
+      margin-top: 12px; background: rgba(0,230,118,0.07); border: 1px solid rgba(0,230,118,0.2);
+      border-radius: 10px; padding: 10px 12px; text-align: center;
+    }
+    .bankroll-proj-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .bankroll-proj-val { font-size: 26px; font-weight: 900; color: var(--accent); }
+    .bankroll-proj-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
     /* Strong play — edge ≥ 1.25 */
     .pick-card.strong-play {
       border-color: rgba(255,160,0,0.5);
@@ -1963,31 +2019,31 @@ async function loadToday(){
 
     // ── Step 4: Load everything else in parallel in background ────────
     const rerender = (extra={}) => {
-      setPanel('panel-today', renderToday(picks, extra.ticker||'', extra.warnings||{}, extra.games||[], recData));
+      setPanel('panel-today', renderToday(picks, extra.ticker||'', extra.warnings||{}, extra.games||[], recData, extra.tmrw||[]));
       animateEdgeBars(); animateEdgeRings(); updateCountdowns();
     };
 
-    let ticker='', games=[], lineupWarnings={};
+    let ticker='', games=[], lineupWarnings={}, tmrwPitchers=[];
 
     // Live scores
     loadLiveScores(picks).then(({ticker:t, games:g}) => {
       ticker = t; games = g;
       if (g.some(x => x?.status?.abstractGameState==='Live')) startLiveRefresh();
       updateTodayTabBadge(g);
-      rerender({ticker, games, warnings: lineupWarnings});
+      rerender({ticker, games, warnings: lineupWarnings, tmrw: tmrwPitchers});
     }).catch(()=>{});
 
     // Lineup warnings
     loadLineupWarnings(picks).then(w => {
       lineupWarnings = w;
-      rerender({ticker, games, warnings: lineupWarnings});
+      rerender({ticker, games, warnings: lineupWarnings, tmrw: tmrwPitchers});
     }).catch(()=>{});
 
     // Team stats
     fetchJSON('/api/team_stats?secret=mlbpicks2026').then(d => {
       if (d?.teams) {
         teamStats = d.teams;
-        rerender({ticker, games, warnings: lineupWarnings});
+        rerender({ticker, games, warnings: lineupWarnings, tmrw: tmrwPitchers});
       }
     }).catch(()=>{});
 
@@ -1995,8 +2051,14 @@ async function loadToday(){
     fetchJSON('/api/odds').then(d => {
       if (d?.games) {
         oddsData = d.games;
-        rerender({ticker, games, warnings: lineupWarnings});
+        rerender({ticker, games, warnings: lineupWarnings, tmrw: tmrwPitchers});
       }
+    }).catch(()=>{});
+
+    // Tomorrow's pitchers
+    loadTomorrowPitchers().then(p => {
+      tmrwPitchers = p;
+      rerender({ticker, games, warnings: lineupWarnings, tmrw: tmrwPitchers});
     }).catch(()=>{});
 
   } catch(e) {
@@ -2004,7 +2066,7 @@ async function loadToday(){
   }
 }
 
-function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null) {
+function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null, tmrwGames=[]) {
   const today=new Date().toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
 
   // Streak fire banner
@@ -2070,11 +2132,11 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
     const homeL3  =p.home_recent_era!=null?`<span class="era-l3"> · L3: ${p.home_recent_era.toFixed(2)}</span>`:'';
 
     return `
-      <div class="pick-card pick-card-anim${isElite?' elite-glow':isStrong?' strong-play':''}" id="pick-card-${p.away_team.replace(/\s/g,'-')}-${p.home_team.replace(/\s/g,'-')}" style="position:relative;animation-delay:${i*0.08}s;${!isElite&&!isStrong?teamGlow(p.pick):''}"  >
+      <div class="pick-card pick-card-anim${isPotd?' potd-spotlight':''}${isElite?' elite-glow':isStrong?' strong-play':''}" id="pick-card-${p.away_team.replace(/\s/g,'-')}-${p.home_team.replace(/\s/g,'-')}" style="position:relative;animation-delay:${i*0.08}s;${!isElite&&!isStrong&&!isPotd?teamGlow(p.pick):''}"  >
         <div class="pick-card-accent"></div>
         <div class="pick-card-body">
 
-          ${isPotd?`<div class="potd-crown">👑 Pick of the Day</div>`:''}
+          ${isPotd?`<div class="potd-label">👑 Pick of the Day</div>`:''}
           ${isSolid?`<div class="strong-banner" style="color:#ffb300;background:rgba(255,179,0,0.1);border-color:rgba(255,179,0,0.35)"><span class="strong-banner-icon">⭐</span> Value Play — 1.5 units</div>`:''}
           ${isStrong?`<div class="strong-banner"><span class="strong-banner-icon">🔥</span> Strong Play — 2 units</div>`:''}
           ${isElite?`<div class="strong-banner" style="color:#00e676;background:rgba(0,230,118,0.1);border-color:rgba(0,230,118,0.35)"><span class="strong-banner-icon">💪</span> Elite Play — 2.5 units</div>`:''}
@@ -2139,7 +2201,111 @@ function renderToday(picks, ticker='', lineupWarnings={}, games=[], recData=null
     ${streakBanner}
     <div style="text-align:center;padding:6px 4px 2px;font-size:13px;color:var(--muted)">${today}</div>
     <div class="refresh-note">Auto-refreshes every 5 min</div>
-    ${cards}`;
+    ${cards}
+    ${renderTomorrowPitchers(tmrwGames)}`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   BANKROLL TRACKER
+══════════════════════════════════════════════════════════════════════ */
+function buildBankrollCard(r) {
+  const BASE      = 1000;           // starting bankroll $1,000
+  const unitSize  = 100;            // $100 per unit
+  const current   = BASE + r.profit;
+
+  // Days active (May 1 to today)
+  const startDate   = new Date('2026-05-01');
+  const today       = new Date();
+  const daysActive  = Math.max(1, Math.round((today - startDate) / 86400000));
+
+  // Days remaining in season (end Sep 30)
+  const seasonEnd   = new Date('2026-09-30');
+  const daysLeft    = Math.max(0, Math.round((seasonEnd - today) / 86400000));
+
+  // Projection
+  const dailyProfit = r.profit / daysActive;
+  const projected   = current + (dailyProfit * daysLeft);
+  const projColor   = projected >= BASE ? '#00e676' : '#ff4444';
+
+  // ROI color
+  const currColor   = current >= BASE ? 'var(--win)' : 'var(--loss)';
+
+  return `
+  <div class="bankroll-card">
+    <h3>💰 Bankroll Tracker</h3>
+    <div class="bankroll-row">
+      <span class="bankroll-lbl">Starting Bankroll</span>
+      <span class="bankroll-val" style="color:var(--muted)">$${BASE.toLocaleString()}</span>
+    </div>
+    <div class="bankroll-row">
+      <span class="bankroll-lbl">Total Profit</span>
+      <span class="bankroll-val" style="color:${r.profit>=0?'var(--win)':'var(--loss)'}">${r.profit>=0?'+':'-'}$${Math.abs(Math.round(r.profit)).toLocaleString()}</span>
+    </div>
+    <div class="bankroll-row">
+      <span class="bankroll-lbl">Current Bankroll</span>
+      <span class="bankroll-val" style="color:${currColor}">$${Math.round(current).toLocaleString()}</span>
+    </div>
+    <div class="bankroll-row">
+      <span class="bankroll-lbl">Days Active</span>
+      <span class="bankroll-val" style="color:var(--muted);font-size:13px">${daysActive} days</span>
+    </div>
+    <div class="bankroll-row">
+      <span class="bankroll-lbl">Days Left in Season</span>
+      <span class="bankroll-val" style="color:var(--muted);font-size:13px">${daysLeft} days</span>
+    </div>
+    <div class="bankroll-proj">
+      <div class="bankroll-proj-label">📈 Projected End of Season</div>
+      <div class="bankroll-proj-val" style="color:${projColor}">$${Math.round(projected).toLocaleString()}</div>
+      <div class="bankroll-proj-sub">Based on $${dailyProfit>=0?'+':''}${Math.round(dailyProfit)}/day avg · ${daysLeft} days remaining</div>
+    </div>
+  </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TOMORROW'S PITCHERS
+══════════════════════════════════════════════════════════════════════ */
+async function loadTomorrowPitchers() {
+  const d = new Date(); d.setDate(d.getDate() + 1);
+  const tmrw = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  try {
+    const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=${tmrw}&endDate=${tmrw}&hydrate=probablePitcher&gameType=R`;
+    const data = await fetch(url).then(r=>r.json());
+    const games = [];
+    for (const date of (data.dates||[])) {
+      for (const g of (date.games||[])) {
+        const awayTeam = g.teams?.away?.team?.name || '';
+        const homeTeam = g.teams?.home?.team?.name || '';
+        const awayP    = g.teams?.away?.probablePitcher?.fullName || 'TBD';
+        const homeP    = g.teams?.home?.probablePitcher?.fullName || 'TBD';
+        const gameTime = g.gameDate ? new Date(g.gameDate).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'}) : '';
+        games.push({ awayTeam, homeTeam, awayP, homeP, gameTime });
+      }
+    }
+    return games;
+  } catch(e) { return []; }
+}
+
+function renderTomorrowPitchers(games) {
+  if (!games || !games.length) return '';
+  const d = new Date(); d.setDate(d.getDate()+1);
+  const label = d.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+  const rows = games.map(g => `
+    <div class="tmrw-card">
+      <div class="tmrw-teams">
+        <div class="tmrw-matchup">${g.awayTeam.split(' ').pop()} <span style="color:var(--muted);font-weight:400">@</span> ${g.homeTeam.split(' ').pop()}</div>
+        <div class="tmrw-pitchers">
+          <span class="tmrw-pitcher-name">${g.awayP.split(' ').pop()}</span>
+          <span style="color:var(--border)">vs</span>
+          <span class="tmrw-pitcher-name">${g.homeP.split(' ').pop()}</span>
+        </div>
+      </div>
+      <div class="tmrw-time">${g.gameTime}</div>
+    </div>`).join('');
+  return `
+  <div class="tmrw-section">
+    <div class="tmrw-header">⚾ Tomorrow — ${label}</div>
+    ${rows}
+  </div>`;
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -2209,8 +2375,8 @@ function renderRecord(r,allPicks){
       <div class="pct-markers"><span>0%</span><span style="color:var(--accent);font-weight:700">Break-even: 52.4%</span><span>100%</span></div>
     </div>
     <div class="stats-grid">
-      <div class="stat-box ${r.roi>=0?'positive':'negative'}"><div class="stat-val ${roiColor}" id="anim-roi">${r.roi>=0?'+':''}${r.roi}%</div><div class="stat-lbl">ROI</div></div>
-      <div class="stat-box ${r.profit>=0?'positive':'negative'}"><div class="stat-val ${profitColor}" id="anim-profit">${r.profit>=0?'+':'-'}$${Math.abs(r.profit)}</div><div class="stat-lbl">Profit (units)</div></div>
+      <div class="stat-box ${r.roi>=0?'positive':'negative'}"><div class="stat-val ${roiColor}" id="anim-roi">0%</div><div class="stat-lbl">ROI</div></div>
+      <div class="stat-box ${r.profit>=0?'positive':'negative'}"><div class="stat-val ${profitColor}" id="anim-profit">$0</div><div class="stat-lbl">Profit</div></div>
     </div>
     <div class="week-box">
       <h3>📅 This Week</h3>
@@ -2224,7 +2390,8 @@ function renderRecord(r,allPicks){
     <div class="chart-card">
       <h3>Cumulative Profit</h3>
       <div class="chart-wrap"><canvas id="profit-chart"></canvas></div>
-    </div>`;
+    </div>
+    ${buildBankrollCard(r)}`;
 }
 
 function renderChart(points){
