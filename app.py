@@ -251,9 +251,9 @@ def get_units(margin):
     """Return recommended bet units based on edge/margin score."""
     try:
         m = float(margin)
-        if m >= 2.5: return 2.5
-        if m >= 2.0: return 2.0
-        if m >= 1.5: return 1.5
+        if m >= 2.0: return 2.5
+        if m >= 1.5: return 2.0
+        if m >= 1.25: return 1.5
         return 1.0
     except (TypeError, ValueError):
         return 1.0
