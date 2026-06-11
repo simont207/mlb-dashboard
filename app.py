@@ -284,7 +284,7 @@ def odds_payout(odds_str, bet=100):
 # ── API: Overall record ──────────────────────────────────────────────────────────
 @app.route("/api/record")
 def api_record():
-    resp = supabase.table("picks").select("result, type, pick_odds").execute()
+    resp = supabase.table("picks").select("result, type, pick_odds, margin").execute()
     rows = resp.data or []
 
     wins = losses = pushes = 0
@@ -376,7 +376,7 @@ def api_picks():
 @app.route("/api/chart")
 def api_chart():
     resp = (supabase.table("picks")
-            .select("date, result, pick_odds")
+            .select("date, result, pick_odds, margin")
             .not_.is_("result", "null")
             .neq("result", "")
             .order("date")
